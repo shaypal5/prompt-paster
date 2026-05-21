@@ -52,15 +52,32 @@ final class PromptLibraryTests: XCTestCase {
         }
     }
 
-    func testValidationRejectsDuplicateIDs() {
+    func testValidationRejectsWhitespacePaddedAndInvalidIDs() {
+        XCTAssertThrowsError(try PromptLibrary(prompts: [
+            Prompt(id: " sample", title: "Title", body: "Body")
+        ]).validated()) { error in
+            XCTAssertEqual(error as? PromptLibraryValidationError, .invalidID(" sample"))
+        }
+
+        XCTAssertThrowsError(try PromptLibrary(prompts: [
+            Prompt(id: "Not A Slug", title: "Title", body: "Body")
+        ]).validated()) { error in
+            XCTAssertEqual(error as? PromptLibraryValidationError, .invalidID("Not A Slug"))
+        }
+    }
+
+    func testValidationWarnsOnDuplicateIDsAndKeepsFirstPromptLoadable() throws {
         let library = PromptLibrary(prompts: [
             Prompt(id: "duplicate", title: "First", body: "Body"),
             Prompt(id: "duplicate", title: "Second", body: "Body")
         ])
 
-        XCTAssertThrowsError(try library.validated()) { error in
-            XCTAssertEqual(error as? PromptLibraryValidationError, .duplicateID("duplicate"))
-        }
+        let result = try library.validatedForLoading()
+
+        XCTAssertEqual(result.library.prompts.map(\.title), ["First"])
+        XCTAssertEqual(result.validation.warnings, [
+            .duplicateID(id: "duplicate", skippedIndexes: [1])
+        ])
     }
 
     func testValidationWarnsOnShortcutConflicts() throws {

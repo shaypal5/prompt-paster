@@ -72,7 +72,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openPromptLibrary() {
-        promptStore.openLibraryFile()
+        do {
+            let libraryURL = try promptStore.prepareLibraryFile()
+            NSWorkspace.shared.open(libraryURL)
+        } catch {
+            promptStore.recordError(error)
+            overlayController.show(message: "Could not open prompt library. \(error.localizedDescription)")
+        }
     }
 
     @objc private func reloadLibrary() {

@@ -29,6 +29,17 @@ final class PromptStoreTests: XCTestCase {
         XCTAssertEqual(store.library?.prompts.map(\.id), ["seed"])
     }
 
+    func testFirstRunCopiesBundledSeedLibraryByDefault() throws {
+        let appSupportURL = makeTemporaryDirectory()
+
+        let store = PromptStore(applicationSupportURL: appSupportURL)
+        let result = store.load()
+
+        XCTAssertTrue(result.didSucceed)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: store.libraryURL.path))
+        XCTAssertGreaterThanOrEqual(store.library?.prompts.count ?? 0, 20)
+    }
+
     func testInvalidJSONKeepsLastValidLibraryInMemory() throws {
         let rootURL = makeTemporaryDirectory()
         let seedURL = rootURL.appendingPathComponent("SeedPrompts.json")
@@ -47,6 +58,25 @@ final class PromptStoreTests: XCTestCase {
         XCTAssertFalse(result.didSucceed)
         XCTAssertNotNil(result.errorMessage)
         XCTAssertEqual(store.library?.prompts.map(\.id), ["seed"])
+    }
+
+    func testDuplicateIDsReloadWithWarningAndFirstPromptOnly() throws {
+        let rootURL = makeTemporaryDirectory()
+        let seedURL = rootURL.appendingPathComponent("SeedPrompts.json")
+        let appSupportURL = rootURL.appendingPathComponent("Application Support", isDirectory: true)
+        try writeLibrary(.init(prompts: [
+            Prompt(id: "duplicate", title: "First", body: "First body"),
+            Prompt(id: "duplicate", title: "Second", body: "Second body")
+        ]), to: seedURL)
+
+        let store = PromptStore(applicationSupportURL: appSupportURL, seedURL: seedURL)
+        let result = store.load()
+
+        XCTAssertTrue(result.didSucceed)
+        XCTAssertEqual(store.library?.prompts.map(\.title), ["First"])
+        XCTAssertEqual(store.validation?.warnings, [
+            .duplicateID(id: "duplicate", skippedIndexes: [1])
+        ])
     }
 
     private func makeTemporaryDirectory() -> URL {

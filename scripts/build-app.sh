@@ -19,9 +19,12 @@ mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 
 cp "$ROOT_DIR/Packaging/Info.plist" "$CONTENTS_DIR/Info.plist"
 cp "$BUILD_DIR/$PRODUCT_NAME" "$MACOS_DIR/$PRODUCT_NAME"
-if [ -d "$BUILD_DIR/${PRODUCT_NAME}_${PRODUCT_NAME}.bundle" ]; then
-    cp -R "$BUILD_DIR/${PRODUCT_NAME}_${PRODUCT_NAME}.bundle" "$RESOURCES_DIR/"
+RESOURCE_BUNDLE="$BUILD_DIR/${PRODUCT_NAME}_${PRODUCT_NAME}.bundle"
+if [ ! -d "$RESOURCE_BUNDLE" ]; then
+    echo "Missing SwiftPM resource bundle: $RESOURCE_BUNDLE" >&2
+    exit 1
 fi
+cp -R "$RESOURCE_BUNDLE" "$RESOURCES_DIR/"
 chmod +x "$MACOS_DIR/$PRODUCT_NAME"
 
 echo "Built $APP_DIR"

@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct SettingsView: View {
@@ -22,7 +23,12 @@ struct SettingsView: View {
 
                 HStack {
                     Button("Open Prompt Library") {
-                        promptStore.openLibraryFile()
+                        do {
+                            let libraryURL = try promptStore.prepareLibraryFile()
+                            NSWorkspace.shared.open(libraryURL)
+                        } catch {
+                            promptStore.recordError(error)
+                        }
                     }
 
                     Button("Reload Library") {

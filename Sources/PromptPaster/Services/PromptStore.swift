@@ -1,4 +1,3 @@
-import AppKit
 import Foundation
 
 struct PromptStoreReloadResult: Equatable {
@@ -49,11 +48,15 @@ final class PromptStore: ObservableObject {
             try ensureLibraryFileExists()
             let data = try Data(contentsOf: libraryURL)
             let decoded = try PromptLibraryCoding.makeDecoder().decode(PromptLibrary.self, from: data)
-            let validation = try decoded.validated()
-            library = decoded
-            self.validation = validation
+            let loadResult = try decoded.validatedForLoading()
+            library = loadResult.library
+            validation = loadResult.validation
             lastErrorMessage = nil
-            return PromptStoreReloadResult(library: decoded, validation: validation, errorMessage: nil)
+            return PromptStoreReloadResult(
+                library: loadResult.library,
+                validation: loadResult.validation,
+                errorMessage: nil
+            )
         } catch {
             let message = error.localizedDescription
             lastErrorMessage = message
@@ -61,13 +64,13 @@ final class PromptStore: ObservableObject {
         }
     }
 
-    func openLibraryFile() {
-        do {
-            try ensureLibraryFileExists()
-            NSWorkspace.shared.open(libraryURL)
-        } catch {
-            lastErrorMessage = error.localizedDescription
-        }
+    func prepareLibraryFile() throws -> URL {
+        try ensureLibraryFileExists()
+        return libraryURL
+    }
+
+    func recordError(_ error: Error) {
+        lastErrorMessage = error.localizedDescription
     }
 
     private func ensureLibraryFileExists() throws {
