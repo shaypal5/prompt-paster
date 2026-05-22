@@ -39,7 +39,7 @@ final class HotkeyControllerTests: XCTestCase {
         XCTAssertEqual(registrar.registerHotkeyCount, 1)
         XCTAssertEqual(registrar.registeredShortcut, .controlOptionSpace)
         XCTAssertEqual(monitor.startCount, 1)
-        XCTAssertTrue(status.isDoubleControlActive)
+        XCTAssertEqual(status.doubleControlStatus, .active)
     }
 
     func testStartIsIdempotentWhileRegistered() throws {
@@ -58,6 +58,26 @@ final class HotkeyControllerTests: XCTestCase {
         XCTAssertEqual(registrar.installHandlerCount, 1)
         XCTAssertEqual(registrar.registerHotkeyCount, 1)
         XCTAssertEqual(monitor.startCount, 1)
+    }
+
+    func testStartRetriesDoubleControlWhenFallbackIsRegisteredButMonitorIsNotRunning() throws {
+        let registrar = FakeHotkeyRegistrar()
+        let monitor = FakeDoubleControlMonitor(startError: HotkeyControllerError.doubleControlMonitorFailed)
+        let controller = HotkeyController(
+            handler: FakeHotkeyHandler(),
+            registrar: AnyHotkeyRegistrar(registrar),
+            doubleControlMonitor: monitor,
+            accessibilityPermissionChecker: FakeAccessibilityPermissionChecker(isAccessibilityTrusted: true)
+        )
+
+        let firstStatus = try controller.start()
+        monitor.startError = nil
+        let secondStatus = try controller.start()
+
+        XCTAssertEqual(firstStatus.doubleControlStatus, .monitorUnavailable("Double Control unavailable. Could not start double-Control monitoring."))
+        XCTAssertEqual(secondStatus.doubleControlStatus, .active)
+        XCTAssertEqual(registrar.registerHotkeyCount, 1)
+        XCTAssertEqual(monitor.startCount, 2)
     }
 
     func testStartRemovesHandlerWhenRegistrationFails() {
@@ -96,7 +116,6 @@ final class HotkeyControllerTests: XCTestCase {
         XCTAssertEqual(registrar.unregisterHotkeyCount, 1)
         XCTAssertEqual(registrar.removeHandlerCount, 1)
         XCTAssertEqual(registrar.cleanupEvents, ["unregister-hotkey", "remove-handler"])
-        XCTAssertEqual(monitor.stopCount, 1)
     }
 
     func testDeinitCleansUpRegisteredHotkeyAndHandler() throws {
@@ -128,9 +147,28 @@ final class HotkeyControllerTests: XCTestCase {
 
         let status = try controller.start()
 
-        XCTAssertFalse(status.isDoubleControlActive)
+        XCTAssertEqual(status.doubleControlStatus, .needsAccessibility)
         XCTAssertEqual(monitor.startCount, 0)
-        XCTAssertTrue(status.doubleControlStatusMessage?.contains("Accessibility permission") == true)
+        XCTAssertTrue(status.doubleControlStatus.message?.contains("Accessibility permission") == true)
+    }
+
+    func testRequestAccessibilityPermissionRechecksAndStartsMonitor() throws {
+        let monitor = FakeDoubleControlMonitor()
+        let permissionChecker = FakeAccessibilityPermissionChecker(isAccessibilityTrusted: false)
+        let controller = HotkeyController(
+            handler: FakeHotkeyHandler(),
+            registrar: AnyHotkeyRegistrar(FakeHotkeyRegistrar()),
+            doubleControlMonitor: monitor,
+            accessibilityPermissionChecker: permissionChecker
+        )
+
+        XCTAssertEqual(try controller.start().doubleControlStatus, .needsAccessibility)
+        permissionChecker.isAccessibilityTrusted = true
+        let status = controller.requestAccessibilityPermission()
+
+        XCTAssertEqual(permissionChecker.requestCount, 1)
+        XCTAssertEqual(monitor.startCount, 1)
+        XCTAssertEqual(status.doubleControlStatus, .active)
     }
 
     func testDoubleControlMonitorTriggersSameHandlerRoute() throws {
@@ -203,6 +241,67 @@ final class HotkeyControllerTests: XCTestCase {
         XCTAssertFalse(detector.handle(.controlChanged(isPressed: false, otherModifiersPressed: false, timestamp: 1.35)))
         XCTAssertFalse(detector.handle(.controlChanged(isPressed: true, otherModifiersPressed: false, timestamp: 1.80)))
         XCTAssertFalse(detector.handle(.controlChanged(isPressed: false, otherModifiersPressed: false, timestamp: 1.85)))
+    }
+
+    func testDoubleControlEventMapperMapsLeftAndRightControlFlagsChanged() {
+        XCTAssertEqual(
+            DoubleControlEventInputMapper.input(
+                for: .flagsChanged,
+                keyCode: CGKeyCode(kVK_Control),
+                flags: .maskControl,
+                timestamp: 2.0
+            ),
+            .controlChanged(isPressed: true, otherModifiersPressed: false, timestamp: 2.0)
+        )
+
+        XCTAssertEqual(
+            DoubleControlEventInputMapper.input(
+                for: .flagsChanged,
+                keyCode: CGKeyCode(kVK_RightControl),
+                flags: [],
+                timestamp: 2.1
+            ),
+            .controlChanged(isPressed: false, otherModifiersPressed: false, timestamp: 2.1)
+        )
+    }
+
+    func testDoubleControlEventMapperFlagsOtherModifiers() {
+        XCTAssertEqual(
+            DoubleControlEventInputMapper.input(
+                for: .flagsChanged,
+                keyCode: CGKeyCode(kVK_Control),
+                flags: [.maskControl, .maskAlternate],
+                timestamp: 3.0
+            ),
+            .controlChanged(isPressed: true, otherModifiersPressed: true, timestamp: 3.0)
+        )
+    }
+
+    func testDoubleControlEventMapperTreatsNonControlModifierAndKeyDownAsInterruptions() {
+        XCTAssertEqual(
+            DoubleControlEventInputMapper.input(
+                for: .flagsChanged,
+                keyCode: CGKeyCode(kVK_Option),
+                flags: .maskAlternate,
+                timestamp: 4.0
+            ),
+            .unrelatedInput(timestamp: 4.0)
+        )
+        XCTAssertEqual(
+            DoubleControlEventInputMapper.input(
+                for: .keyDown,
+                keyCode: CGKeyCode(kVK_ANSI_A),
+                flags: [],
+                timestamp: 4.1
+            ),
+            .unrelatedInput(timestamp: 4.1)
+        )
+    }
+
+    func testDoubleControlEventMapperIdentifiesDisabledTapEvents() {
+        XCTAssertTrue(DoubleControlEventInputMapper.isDisabledTapEvent(.tapDisabledByTimeout))
+        XCTAssertTrue(DoubleControlEventInputMapper.isDisabledTapEvent(.tapDisabledByUserInput))
+        XCTAssertFalse(DoubleControlEventInputMapper.isDisabledTapEvent(.flagsChanged))
     }
 }
 
@@ -277,10 +376,22 @@ private final class FakeHotkeyRegistrar: HotkeyRegistrar {
 private final class FakeDoubleControlMonitor: DoubleControlMonitoring {
     var startCount = 0
     var stopCount = 0
+    var startError: Error?
     private var eventHandler: (@MainActor (DoubleControlTapInput) -> Void)?
+
+    var isRunning: Bool {
+        eventHandler != nil
+    }
+
+    init(startError: Error? = nil) {
+        self.startError = startError
+    }
 
     func start(eventHandler: @escaping @MainActor (DoubleControlTapInput) -> Void) throws {
         startCount += 1
+        if let startError {
+            throw startError
+        }
         self.eventHandler = eventHandler
     }
 
@@ -294,8 +405,18 @@ private final class FakeDoubleControlMonitor: DoubleControlMonitoring {
     }
 }
 
-private struct FakeAccessibilityPermissionChecker: AccessibilityPermissionChecking {
-    let isAccessibilityTrusted: Bool
+private final class FakeAccessibilityPermissionChecker: AccessibilityPermissionChecking {
+    var isAccessibilityTrusted: Bool
+    var requestCount = 0
+
+    init(isAccessibilityTrusted: Bool) {
+        self.isAccessibilityTrusted = isAccessibilityTrusted
+    }
+
+    func requestAccessibilityPermission() -> Bool {
+        requestCount += 1
+        return isAccessibilityTrusted
+    }
 
     func openAccessibilitySettings() {}
 }

@@ -132,24 +132,64 @@ struct DoubleControlTapDetector {
 
 struct HotkeyStartupStatus: Equatable {
     var fallbackHotkeyStatusMessage: String?
-    var doubleControlStatusMessage: String?
-    var isDoubleControlActive: Bool
+    var doubleControlStatus: DoubleControlTriggerStatus
 
     static let fallbackOnly = HotkeyStartupStatus(
         fallbackHotkeyStatusMessage: nil,
-        doubleControlStatusMessage: nil,
-        isDoubleControlActive: false
+        doubleControlStatus: .needsAccessibility
     )
+}
+
+enum DoubleControlTriggerStatus: Equatable {
+    case active
+    case needsAccessibility
+    case monitorUnavailable(String)
+
+    var displayValue: String {
+        switch self {
+        case .active:
+            "Active"
+        case .needsAccessibility:
+            "Needs Accessibility"
+        case .monitorUnavailable:
+            "Unavailable"
+        }
+    }
+
+    var message: String? {
+        switch self {
+        case .active:
+            nil
+        case .needsAccessibility:
+            "Double Control needs Accessibility permission. Grant permission in System Settings, then recheck permission. The fallback hotkey remains available."
+        case let .monitorUnavailable(message):
+            message
+        }
+    }
+
+    var canRequestAccessibilityPermission: Bool {
+        self == .needsAccessibility
+    }
 }
 
 protocol AccessibilityPermissionChecking {
     var isAccessibilityTrusted: Bool { get }
+    @discardableResult
+    func requestAccessibilityPermission() -> Bool
     func openAccessibilitySettings()
 }
 
 struct AccessibilityPermissionChecker: AccessibilityPermissionChecking {
     var isAccessibilityTrusted: Bool {
         AXIsProcessTrusted()
+    }
+
+    @discardableResult
+    func requestAccessibilityPermission() -> Bool {
+        let options = [
+            "AXTrustedCheckOptionPrompt": true
+        ] as CFDictionary
+        return AXIsProcessTrustedWithOptions(options)
     }
 
     func openAccessibilitySettings() {
@@ -181,6 +221,8 @@ protocol HotkeyRegistrar {
 
 @MainActor
 protocol DoubleControlMonitoring: AnyObject {
+    var isRunning: Bool { get }
+
     func start(eventHandler: @escaping @MainActor (DoubleControlTapInput) -> Void) throws
     func stop()
 }
@@ -243,6 +285,20 @@ final class HotkeyController {
         accessibilityPermissionChecker.openAccessibilitySettings()
     }
 
+    @discardableResult
+    func requestAccessibilityPermission() -> HotkeyStartupStatus {
+        accessibilityPermissionChecker.requestAccessibilityPermission()
+
+        guard registrationState.isRegistered else {
+            return HotkeyStartupStatus(
+                fallbackHotkeyStatusMessage: "Fallback hotkey has not started.",
+                doubleControlStatus: .monitorUnavailable("Double Control not started because fallback hotkey registration is not active.")
+            )
+        }
+
+        return startDoubleControlMonitoring()
+    }
+
     fileprivate func handleRegisteredHotkey() {
         router.handleTrigger()
     }
@@ -255,11 +311,17 @@ final class HotkeyController {
     }
 
     private func startDoubleControlMonitoring() -> HotkeyStartupStatus {
+        if doubleControlMonitor.isRunning {
+            return HotkeyStartupStatus(
+                fallbackHotkeyStatusMessage: nil,
+                doubleControlStatus: .active
+            )
+        }
+
         guard accessibilityPermissionChecker.isAccessibilityTrusted else {
             return HotkeyStartupStatus(
                 fallbackHotkeyStatusMessage: nil,
-                doubleControlStatusMessage: "Double Control needs Accessibility permission. Grant permission in System Settings, then relaunch Prompt Paster. The fallback hotkey remains available.",
-                isDoubleControlActive: false
+                doubleControlStatus: .needsAccessibility
             )
         }
 
@@ -278,32 +340,32 @@ final class HotkeyController {
             }
             return HotkeyStartupStatus(
                 fallbackHotkeyStatusMessage: nil,
-                doubleControlStatusMessage: nil,
-                isDoubleControlActive: true
+                doubleControlStatus: .active
             )
         } catch {
             return HotkeyStartupStatus(
                 fallbackHotkeyStatusMessage: nil,
-                doubleControlStatusMessage: "Double Control unavailable. \(error.localizedDescription)",
-                isDoubleControlActive: false
+                doubleControlStatus: .monitorUnavailable("Double Control unavailable. \(error.localizedDescription)")
             )
         }
     }
 
     private func statusForCurrentDoubleControlPermission() -> HotkeyStartupStatus {
-        guard accessibilityPermissionChecker.isAccessibilityTrusted else {
+        if doubleControlMonitor.isRunning {
             return HotkeyStartupStatus(
                 fallbackHotkeyStatusMessage: nil,
-                doubleControlStatusMessage: "Double Control needs Accessibility permission. Grant permission in System Settings, then relaunch Prompt Paster. The fallback hotkey remains available.",
-                isDoubleControlActive: false
+                doubleControlStatus: .active
             )
         }
 
-        return HotkeyStartupStatus(
-            fallbackHotkeyStatusMessage: nil,
-            doubleControlStatusMessage: nil,
-            isDoubleControlActive: true
-        )
+        guard accessibilityPermissionChecker.isAccessibilityTrusted else {
+            return HotkeyStartupStatus(
+                fallbackHotkeyStatusMessage: nil,
+                doubleControlStatus: .needsAccessibility
+            )
+        }
+
+        return startDoubleControlMonitoring()
     }
 }
 
@@ -409,6 +471,10 @@ final class CGEventDoubleControlMonitor: DoubleControlMonitoring {
     private var runLoopSource: CFRunLoopSource?
     private var eventHandler: (@MainActor (DoubleControlTapInput) -> Void)?
 
+    var isRunning: Bool {
+        eventTap != nil
+    }
+
     func start(eventHandler: @escaping @MainActor (DoubleControlTapInput) -> Void) throws {
         guard eventTap == nil else {
             self.eventHandler = eventHandler
@@ -466,31 +532,56 @@ final class CGEventDoubleControlMonitor: DoubleControlMonitoring {
     }
 
     private func handle(type: CGEventType, event: CGEvent) {
+        if DoubleControlEventInputMapper.isDisabledTapEvent(type) {
+            if let eventTap {
+                CGEvent.tapEnable(tap: eventTap, enable: true)
+            }
+            return
+        }
+
+        let keyCode = CGKeyCode(event.getIntegerValueField(.keyboardEventKeycode))
+        guard let input = DoubleControlEventInputMapper.input(
+            for: type,
+            keyCode: keyCode,
+            flags: event.flags,
+            timestamp: event.timestampSeconds
+        ) else {
+            return
+        }
+        eventHandler?(input)
+    }
+}
+
+enum DoubleControlEventInputMapper {
+    static func input(
+        for type: CGEventType,
+        keyCode: CGKeyCode,
+        flags: CGEventFlags,
+        timestamp: TimeInterval
+    ) -> DoubleControlTapInput? {
         switch type {
         case .flagsChanged:
-            guard Self.isControlKeyEvent(event) else {
-                eventHandler?(.unrelatedInput(timestamp: event.timestampSeconds))
-                return
+            guard isControlKeyCode(keyCode) else {
+                return .unrelatedInput(timestamp: timestamp)
             }
-
-            let flags = event.flags
-            eventHandler?(
-                .controlChanged(
-                    isPressed: flags.contains(.maskControl),
-                    otherModifiersPressed: Self.hasOtherModifier(in: flags),
-                    timestamp: event.timestampSeconds
-                )
+            return .controlChanged(
+                isPressed: flags.contains(.maskControl),
+                otherModifiersPressed: hasOtherModifier(in: flags),
+                timestamp: timestamp
             )
         case .keyDown:
-            eventHandler?(.unrelatedInput(timestamp: event.timestampSeconds))
+            return .unrelatedInput(timestamp: timestamp)
         default:
-            break
+            return nil
         }
     }
 
-    private static func isControlKeyEvent(_ event: CGEvent) -> Bool {
-        let keyCode = CGKeyCode(event.getIntegerValueField(.keyboardEventKeycode))
-        return keyCode == CGKeyCode(kVK_Control) || keyCode == CGKeyCode(kVK_RightControl)
+    static func isDisabledTapEvent(_ type: CGEventType) -> Bool {
+        type == .tapDisabledByTimeout || type == .tapDisabledByUserInput
+    }
+
+    private static func isControlKeyCode(_ keyCode: CGKeyCode) -> Bool {
+        keyCode == CGKeyCode(kVK_Control) || keyCode == CGKeyCode(kVK_RightControl)
     }
 
     private static func hasOtherModifier(in flags: CGEventFlags) -> Bool {

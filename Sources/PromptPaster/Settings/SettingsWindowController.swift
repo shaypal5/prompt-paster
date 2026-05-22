@@ -6,17 +6,13 @@ final class SettingsWindowController {
     private var window: NSWindow?
     private let promptStore: PromptStore
     private let openAccessibilitySettings: () -> Void
+    private let requestAccessibilityPermission: () -> Void
     var fallbackHotkeyStatusMessage: String? {
         didSet {
             refreshContentView()
         }
     }
-    var doubleControlStatusMessage: String? {
-        didSet {
-            refreshContentView()
-        }
-    }
-    var isDoubleControlActive: Bool {
+    var doubleControlStatus: DoubleControlTriggerStatus {
         didSet {
             refreshContentView()
         }
@@ -25,15 +21,15 @@ final class SettingsWindowController {
     init(
         promptStore: PromptStore,
         fallbackHotkeyStatusMessage: String? = nil,
-        doubleControlStatusMessage: String? = nil,
-        isDoubleControlActive: Bool = false,
-        openAccessibilitySettings: @escaping () -> Void = {}
+        doubleControlStatus: DoubleControlTriggerStatus = .needsAccessibility,
+        openAccessibilitySettings: @escaping () -> Void = {},
+        requestAccessibilityPermission: @escaping () -> Void = {}
     ) {
         self.promptStore = promptStore
         self.fallbackHotkeyStatusMessage = fallbackHotkeyStatusMessage
-        self.doubleControlStatusMessage = doubleControlStatusMessage
-        self.isDoubleControlActive = isDoubleControlActive
+        self.doubleControlStatus = doubleControlStatus
         self.openAccessibilitySettings = openAccessibilitySettings
+        self.requestAccessibilityPermission = requestAccessibilityPermission
     }
 
     func show() {
@@ -65,9 +61,9 @@ final class SettingsWindowController {
         SettingsView(
             promptStore: promptStore,
             fallbackHotkeyStatusMessage: fallbackHotkeyStatusMessage,
-            doubleControlStatusMessage: doubleControlStatusMessage,
-            isDoubleControlActive: isDoubleControlActive,
-            openAccessibilitySettings: openAccessibilitySettings
+            doubleControlStatus: doubleControlStatus,
+            openAccessibilitySettings: openAccessibilitySettings,
+            requestAccessibilityPermission: requestAccessibilityPermission
         )
     }
 }
