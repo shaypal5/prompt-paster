@@ -97,4 +97,26 @@ struct PromptOverlayState {
         return visiblePrompts[nextIndex].id
     }
 
+    static func previewText(for body: String, characterLimit: Int) -> String {
+        guard body.count > characterLimit else {
+            return body
+        }
+
+        let truncationMarker = "..."
+        let prefixLength = max(0, characterLimit - truncationMarker.count)
+        return String(body.prefix(prefixLength)) + truncationMarker
+    }
+
+    static func previewLineLimit(for characterLimit: Int) -> Int {
+        switch characterLimit {
+        case ...80:
+            2
+        case ...180:
+            3
+        case ...320:
+            5
+        default:
+            7
+        }
+    }
 }

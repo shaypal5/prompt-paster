@@ -2,6 +2,7 @@ import SwiftUI
 
 struct PromptOverlayView: View {
     @ObservedObject var promptStore: PromptStore
+    @ObservedObject var settingsStore: SettingsStore
 
     let message: String?
     let clipboard: ClipboardCopying
@@ -16,12 +17,14 @@ struct PromptOverlayView: View {
 
     init(
         promptStore: PromptStore,
+        settingsStore: SettingsStore,
         message: String?,
         clipboard: ClipboardCopying = ClipboardService(),
         openSettings: @escaping () -> Void = {},
         close: @escaping () -> Void
     ) {
         self.promptStore = promptStore
+        self.settingsStore = settingsStore
         self.message = message
         self.clipboard = clipboard
         self.openSettings = openSettings
@@ -83,7 +86,10 @@ struct PromptOverlayView: View {
                 .frame(width: 0, height: 0)
         )
         .padding(1)
-        .frame(minWidth: 760, minHeight: 480)
+        .frame(
+            minWidth: CGFloat(OverlayDisplayConfiguration.minimumPercentageModeWidthPixels),
+            minHeight: CGFloat(OverlayDisplayConfiguration.minimumPercentageModeHeightPixels)
+        )
         .onAppear {
             selectedCategoryID = PromptCategoryFilter.all.id
             keepCategoryVisible()
@@ -205,7 +211,8 @@ struct PromptOverlayView: View {
                         PromptRowView(
                             prompt: prompt,
                             shortcutBadge: index < 9 ? "\(index + 1)" : nil,
-                            isSelected: prompt.id == selectedPromptID
+                            isSelected: prompt.id == selectedPromptID,
+                            previewCharacterLimit: settingsStore.promptPreviewCharacterLimit
                         )
                         .contentShape(Rectangle())
                         .onTapGesture {
@@ -310,6 +317,7 @@ private struct PromptRowView: View {
     let prompt: Prompt
     let shortcutBadge: String?
     let isSelected: Bool
+    let previewCharacterLimit: Int
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -329,10 +337,13 @@ private struct PromptRowView: View {
                     }
                 }
 
-                Text(prompt.body)
+                Text(PromptOverlayState.previewText(
+                    for: prompt.body,
+                    characterLimit: previewCharacterLimit
+                ))
                     .font(.callout)
                     .foregroundStyle(.secondary)
-                    .lineLimit(3)
+                    .lineLimit(PromptOverlayState.previewLineLimit(for: previewCharacterLimit))
                     .fixedSize(horizontal: false, vertical: true)
 
                 if !prompt.tags.isEmpty {

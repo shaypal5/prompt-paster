@@ -106,4 +106,18 @@ final class PromptOverlayStateTests: XCTestCase {
             )
         )
     }
+
+    func testPreviewTextTruncatesToConfiguredCharacterLimit() {
+        let body = "1234567890abcdef"
+
+        XCTAssertEqual(PromptOverlayState.previewText(for: body, characterLimit: 10), "1234567...")
+        XCTAssertEqual(PromptOverlayState.previewText(for: body, characterLimit: 16), body)
+    }
+
+    func testPreviewLineLimitScalesWithCharacterLimit() {
+        XCTAssertEqual(PromptOverlayState.previewLineLimit(for: 40), 2)
+        XCTAssertEqual(PromptOverlayState.previewLineLimit(for: 120), 3)
+        XCTAssertEqual(PromptOverlayState.previewLineLimit(for: 260), 5)
+        XCTAssertEqual(PromptOverlayState.previewLineLimit(for: 600), 7)
+    }
 }

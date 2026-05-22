@@ -10,6 +10,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyTriggerHandling 
     private var doubleControlStatus: DoubleControlTriggerStatus = .needsAccessibility
     private lazy var overlayController = OverlayWindowController(
         promptStore: promptStore,
+        settingsStore: settingsStore,
         openSettings: { [weak self] in
             self?.openSettings()
         }
