@@ -345,6 +345,11 @@ Suggested seed prompt count:
 
 Goal: produce an installable app artifact.
 
+Current `PACKAGING-1` scope uses a DMG as the first installable artifact. This
+matches the normal macOS drag-to-Applications release flow and keeps local
+validation independent of Apple Developer credentials. ZIP packaging remains a
+later distribution option if release hosting needs it.
+
 Tasks:
 
 - Configure app icon.
@@ -355,6 +360,7 @@ Tasks:
 - Add install instructions to `README.md`.
 - Add permission instructions.
 - Add troubleshooting section.
+- Keep signing and notarization optional for local validation.
 
 Validation:
 
@@ -443,25 +449,6 @@ Recommended approach:
 - Copy only in v1.
 - Consider opt-in auto-paste later with clear warnings.
 
-## First PR Recommendation
-
-After this docs PR, the next implementation PR should be:
-
-```text
-APP-SHELL-1: Add native macOS menu-bar app shell
-```
-
-Scope:
-
-- Create macOS app project.
-- Add menu bar lifecycle.
-- Add placeholder overlay.
-- Add empty settings window.
-- Add basic README run instructions.
-
-Do not include prompt storage or hotkey logic in the first implementation PR.
-That keeps the initial app scaffold reviewable and makes the next slices easier.
-
 ## Suggested PR Sequence
 
 1. `DOCS-SPEC-1`: Add design, architecture, and implementation docs.
@@ -473,3 +460,9 @@ That keeps the initial app scaffold reviewable and makes the next slices easier.
 7. `HOTKEY-2`: Add double-control trigger and permission flow.
 8. `SETTINGS-1`: Add settings and launch-at-login controls.
 9. `PACKAGING-1`: Add installable app packaging.
+
+## Post-Sequence Routing
+
+The planned v1 implementation sequence is complete after `PACKAGING-1`.
+Additional PRs should come from fresh release QA, user feedback, or a new
+planning pass rather than continuing this initial sequence by default.
