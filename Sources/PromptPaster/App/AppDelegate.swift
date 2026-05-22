@@ -2,16 +2,26 @@ import AppKit
 import SwiftUI
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyTriggerHandling {
     private var statusItem: NSStatusItem?
     private let promptStore = PromptStore()
+    private var fallbackHotkeyStatusMessage: String?
     private lazy var overlayController = OverlayWindowController(promptStore: promptStore)
-    private lazy var settingsController = SettingsWindowController(promptStore: promptStore)
+    private lazy var settingsController = SettingsWindowController(
+        promptStore: promptStore,
+        fallbackHotkeyStatusMessage: fallbackHotkeyStatusMessage
+    )
+    private lazy var hotkeyController = HotkeyController(handler: self)
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         promptStore.load()
         configureStatusItem()
+        startFallbackHotkey()
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        hotkeyController.stop()
     }
 
     private func configureStatusItem() {
@@ -29,7 +39,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
 
         menu.addItem(
-            withTitle: "Open Prompt Paster",
+            withTitle: "Open Prompt Paster (\(HotkeyDisplay.fallbackShortcut))",
             action: #selector(openPromptPaster),
             keyEquivalent: ""
         )
@@ -63,11 +73,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return menu
     }
 
+    func handleHotkeyTrigger() {
+        overlayController.toggle()
+    }
+
     @objc private func openPromptPaster() {
         overlayController.show()
     }
 
     @objc private func openSettings() {
+        settingsController.fallbackHotkeyStatusMessage = fallbackHotkeyStatusMessage
         settingsController.show()
     }
 
@@ -93,5 +108,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func quit() {
         NSApp.terminate(nil)
+    }
+
+    private func startFallbackHotkey() {
+        do {
+            try hotkeyController.start()
+            fallbackHotkeyStatusMessage = nil
+        } catch {
+            fallbackHotkeyStatusMessage = "Fallback hotkey unavailable. \(error.localizedDescription)"
+            NSLog("Prompt Paster fallback hotkey unavailable: \(error.localizedDescription)")
+        }
     }
 }
