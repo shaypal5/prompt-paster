@@ -120,4 +120,65 @@ final class PromptOverlayStateTests: XCTestCase {
         XCTAssertEqual(PromptOverlayState.previewLineLimit(for: 260), 5)
         XCTAssertEqual(PromptOverlayState.previewLineLimit(for: 600), 7)
     }
+
+    func testPromptCardColumnCountAdaptsToAvailableWidth() {
+        XCTAssertEqual(PromptOverlayState.promptCardColumnCount(for: 620), 1)
+        XCTAssertEqual(PromptOverlayState.promptCardColumnCount(for: 860), 2)
+        XCTAssertEqual(PromptOverlayState.promptCardColumnCount(for: 1_180), 3)
+        XCTAssertEqual(PromptOverlayState.promptCardColumnCount(for: 1_560), 4)
+        XCTAssertEqual(PromptOverlayState.promptCardColumnCount(for: 1_900), 5)
+    }
+
+    func testPromptCardSpanKeepsSmallLayoutsSingleColumn() {
+        let longPrompt = Prompt(
+            id: "long",
+            title: "A long prompt that needs more room in a dense scanning layout",
+            category: "Review",
+            body: String(repeating: "Body ", count: 90),
+            tags: ["swift", "review", "macos", "overlay"]
+        )
+
+        XCTAssertEqual(
+            PromptOverlayState.promptCardColumnSpan(
+                for: longPrompt,
+                availableColumns: 2,
+                previewCharacterLimit: 260
+            ),
+            1
+        )
+        XCTAssertEqual(
+            PromptOverlayState.promptCardColumnSpan(
+                for: longPrompt,
+                availableColumns: 3,
+                previewCharacterLimit: 260
+            ),
+            2
+        )
+    }
+
+    func testPromptCardMinimumHeightScalesWithContentDensity() {
+        let compactPrompt = Prompt(id: "compact", title: "Compact", category: nil, body: "Short")
+        let densePrompt = Prompt(
+            id: "dense",
+            title: "Longer prompt title that should receive more vertical room",
+            category: "Planning",
+            body: String(repeating: "Preview ", count: 30),
+            tags: ["scope", "handoff"]
+        )
+
+        XCTAssertEqual(
+            PromptOverlayState.promptCardMinimumHeight(
+                for: compactPrompt,
+                previewCharacterLimit: 80
+            ),
+            126
+        )
+        XCTAssertEqual(
+            PromptOverlayState.promptCardMinimumHeight(
+                for: densePrompt,
+                previewCharacterLimit: 260
+            ),
+            188
+        )
+    }
 }

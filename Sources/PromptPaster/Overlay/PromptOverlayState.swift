@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 
 struct PromptOverlayEmptyState: Equatable {
     let title: String
@@ -117,6 +118,61 @@ struct PromptOverlayState {
             5
         default:
             7
+        }
+    }
+
+    static func promptCardColumnCount(for availableWidth: CGFloat) -> Int {
+        switch availableWidth {
+        case ..<720:
+            1
+        case ..<1_040:
+            2
+        case ..<1_420:
+            3
+        case ..<1_780:
+            4
+        default:
+            5
+        }
+    }
+
+    static func promptCardColumnSpan(
+        for prompt: Prompt,
+        availableColumns: Int,
+        previewCharacterLimit: Int
+    ) -> Int {
+        guard availableColumns >= 3 else {
+            return 1
+        }
+
+        let metadataWeight = prompt.title.count
+            + (prompt.category?.count ?? 0)
+            + prompt.tags.prefix(5).reduce(0) { $0 + $1.count }
+        let previewWeight = min(prompt.body.count, previewCharacterLimit)
+        let shouldUseWideCard = metadataWeight >= 72
+            || previewWeight >= 220
+            || prompt.tags.count >= 4
+
+        return shouldUseWideCard ? 2 : 1
+    }
+
+    static func promptCardMinimumHeight(
+        for prompt: Prompt,
+        previewCharacterLimit: Int
+    ) -> CGFloat {
+        let hasTags = !prompt.tags.isEmpty
+        let hasLongPreview = min(prompt.body.count, previewCharacterLimit) > 140
+        let hasLongTitle = prompt.title.count > 42
+
+        return switch (hasTags, hasLongPreview || hasLongTitle) {
+        case (true, true):
+            188
+        case (true, false):
+            164
+        case (false, true):
+            150
+        case (false, false):
+            126
         }
     }
 }

@@ -205,24 +205,52 @@ struct PromptOverlayView: View {
                 detail: emptyState.detail
             )
         } else {
-            ScrollView {
-                LazyVStack(spacing: 8) {
-                    ForEach(Array(visiblePrompts.enumerated()), id: \.element.id) { index, prompt in
-                        PromptRowView(
-                            prompt: prompt,
-                            shortcutBadge: index < 9 ? "\(index + 1)" : nil,
-                            isSelected: prompt.id == selectedPromptID,
-                            previewCharacterLimit: settingsStore.promptPreviewCharacterLimit
-                        )
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            selectPrompt(at: index)
+            GeometryReader { proxy in
+                let columnCount = PromptOverlayState.promptCardColumnCount(for: proxy.size.width)
+                ScrollView {
+                    LazyVGrid(
+                        columns: promptGridColumns(count: columnCount),
+                        alignment: .leading,
+                        spacing: 10
+                    ) {
+                        ForEach(Array(visiblePrompts.enumerated()), id: \.element.id) { index, prompt in
+                            PromptCardView(
+                                prompt: prompt,
+                                shortcutBadge: index < 9 ? "\(index + 1)" : nil,
+                                isSelected: prompt.id == selectedPromptID,
+                                previewCharacterLimit: settingsStore.promptPreviewCharacterLimit
+                            )
+                            .gridCellColumns(
+                                min(
+                                    columnCount,
+                                    PromptOverlayState.promptCardColumnSpan(
+                                        for: prompt,
+                                        availableColumns: columnCount,
+                                        previewCharacterLimit: settingsStore.promptPreviewCharacterLimit
+                                    )
+                                )
+                            )
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                selectPrompt(at: index)
+                            }
                         }
                     }
+                    .padding(.vertical, 2)
                 }
-                .padding(.vertical, 2)
             }
         }
+    }
+
+    private func promptGridColumns(count: Int) -> [GridItem] {
+        Array(
+            repeating: GridItem(
+                .flexible(minimum: 220, maximum: 360),
+                spacing: 10,
+                alignment: .top
+            ),
+            count: count
+        )
     }
 
     private func handleKeyDown(_ event: NSEvent) -> Bool {
@@ -313,70 +341,91 @@ struct PromptOverlayView: View {
     }
 }
 
-private struct PromptRowView: View {
+private struct PromptCardView: View {
     let prompt: Prompt
     let shortcutBadge: String?
     let isSelected: Bool
     let previewCharacterLimit: Int
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 7) {
-                HStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
+                VStack(alignment: .leading, spacing: 6) {
                     Text(prompt.title)
                         .font(.headline)
-                        .lineLimit(1)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
 
-                    if let category = prompt.category, !category.isEmpty {
-                        Text(category)
-                            .font(.caption.weight(.semibold))
+                    categoryBadge
+                }
+
+                Spacer(minLength: 8)
+
+                shortcutBadgeView
+            }
+
+            Text(PromptOverlayState.previewText(
+                for: prompt.body,
+                characterLimit: previewCharacterLimit
+            ))
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .lineLimit(PromptOverlayState.previewLineLimit(for: previewCharacterLimit))
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            if !prompt.tags.isEmpty {
+                FlowLayout(spacing: 6, lineSpacing: 6) {
+                    ForEach(Array(prompt.tags.prefix(5).enumerated()), id: \.offset) { _, tag in
+                        Text(tag)
+                            .font(.caption)
                             .foregroundStyle(.secondary)
+                            .lineLimit(1)
                             .padding(.horizontal, 7)
                             .padding(.vertical, 3)
-                            .background(.thinMaterial, in: Capsule())
+                            .background(.background.opacity(0.45), in: Capsule())
                     }
                 }
-
-                Text(PromptOverlayState.previewText(
-                    for: prompt.body,
-                    characterLimit: previewCharacterLimit
-                ))
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(PromptOverlayState.previewLineLimit(for: previewCharacterLimit))
-                    .fixedSize(horizontal: false, vertical: true)
-
-                if !prompt.tags.isEmpty {
-                    FlowLayout(spacing: 6, lineSpacing: 6) {
-                        ForEach(Array(prompt.tags.prefix(5).enumerated()), id: \.offset) { _, tag in
-                            Text(tag)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .padding(.horizontal, 7)
-                                .padding(.vertical, 3)
-                                .background(.background.opacity(0.45), in: Capsule())
-                        }
-                    }
-                }
-            }
-
-            Spacer(minLength: 12)
-
-            if let shortcutBadge {
-                Text(shortcutBadge)
-                    .font(.headline.monospacedDigit().weight(.bold))
-                    .foregroundStyle(isSelected ? .white : .secondary)
-                    .frame(width: 30, height: 30)
-                    .background(badgeBackgroundStyle, in: RoundedRectangle(cornerRadius: 7))
             }
         }
-        .padding(13)
-        .frame(maxWidth: .infinity, minHeight: 92, alignment: .topLeading)
-        .background(rowBackgroundStyle, in: RoundedRectangle(cornerRadius: 10))
+        .padding(14)
+        .frame(
+            maxWidth: .infinity,
+            minHeight: PromptOverlayState.promptCardMinimumHeight(
+                for: prompt,
+                previewCharacterLimit: previewCharacterLimit
+            ),
+            alignment: .topLeading
+        )
+        .background(cardBackgroundStyle, in: RoundedRectangle(cornerRadius: 10))
         .overlay(
             RoundedRectangle(cornerRadius: 10)
-                .stroke(rowStrokeStyle, lineWidth: 1)
+                .stroke(cardStrokeStyle, lineWidth: 1)
         )
+    }
+
+    @ViewBuilder
+    private var categoryBadge: some View {
+        if let category = prompt.category, !category.isEmpty {
+            Text(category)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
+                .background(.thinMaterial, in: Capsule())
+        }
+    }
+
+    @ViewBuilder
+    private var shortcutBadgeView: some View {
+        if let shortcutBadge {
+            Text(shortcutBadge)
+                .font(.headline.monospacedDigit().weight(.bold))
+                .foregroundStyle(isSelected ? .white : .secondary)
+                .frame(width: 30, height: 30)
+                .background(badgeBackgroundStyle, in: RoundedRectangle(cornerRadius: 7))
+        }
     }
 
     private var badgeBackgroundStyle: AnyShapeStyle {
@@ -385,13 +434,13 @@ private struct PromptRowView: View {
             : AnyShapeStyle(.background.opacity(0.6))
     }
 
-    private var rowBackgroundStyle: AnyShapeStyle {
+    private var cardBackgroundStyle: AnyShapeStyle {
         isSelected
             ? AnyShapeStyle(.selection.opacity(0.18))
             : AnyShapeStyle(.background.opacity(0.56))
     }
 
-    private var rowStrokeStyle: AnyShapeStyle {
+    private var cardStrokeStyle: AnyShapeStyle {
         isSelected
             ? AnyShapeStyle(Color.accentColor.opacity(0.65))
             : AnyShapeStyle(Color(nsColor: .separatorColor).opacity(0.35))
