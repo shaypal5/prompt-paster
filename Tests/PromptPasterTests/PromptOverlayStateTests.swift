@@ -91,6 +91,25 @@ final class PromptOverlayStateTests: XCTestCase {
         )
     }
 
+    func testSelectionMovementSupportsHorizontalGridNavigation() {
+        XCTAssertEqual(
+            PromptOverlayState.selectedPromptIDMoving(
+                currentID: "second",
+                visiblePrompts: prompts,
+                offset: -1
+            ),
+            "first"
+        )
+        XCTAssertEqual(
+            PromptOverlayState.selectedPromptIDMoving(
+                currentID: "second",
+                visiblePrompts: prompts,
+                offset: 1
+            ),
+            "third"
+        )
+    }
+
     func testKeepingSelectionChoosesFirstVisibleWhenCurrentIsMissing() {
         XCTAssertEqual(
             PromptOverlayState.selectedPromptIDKeepingVisible(

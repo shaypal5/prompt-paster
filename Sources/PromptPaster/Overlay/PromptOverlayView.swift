@@ -263,6 +263,12 @@ struct PromptOverlayView: View {
         case 36, 76:
             selectCurrentPrompt()
             return true
+        case 123:
+            moveSelection(by: -1)
+            return true
+        case 124:
+            moveSelection(by: 1)
+            return true
         case 125:
             moveSelectionVertically(direction: 1)
             return true
