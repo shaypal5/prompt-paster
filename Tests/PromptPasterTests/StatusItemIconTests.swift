@@ -12,6 +12,15 @@ final class StatusItemIconTests: XCTestCase {
         XCTAssertEqual(image.accessibilityDescription, "Prompt Paster")
     }
 
+    func testMenuBarTitleProvidesTextFallback() {
+        let title = StatusItemIcon.makeMenuBarTitle()
+
+        XCTAssertEqual(title.string, "PP")
+        XCTAssertEqual(StatusItemIcon.titlePointSize, 13)
+        XCTAssertNotNil(title.attribute(.font, at: 0, effectiveRange: nil))
+        XCTAssertNotNil(title.attribute(.foregroundColor, at: 0, effectiveRange: nil))
+    }
+
     func testMenuBarImageRendersUsefulOpaqueMask() throws {
         let image = StatusItemIcon.makeMenuBarImage()
         let bitmap = try renderTemplateMask(image)

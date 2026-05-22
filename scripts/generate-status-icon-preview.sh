@@ -23,7 +23,7 @@ func drawStatusBar(in rect: NSRect, background: NSColor, foreground: NSColor, la
     background.setFill()
     NSBezierPath(roundedRect: rect, xRadius: 12, yRadius: 12).fill()
 
-    let itemRect = NSRect(x: rect.midX - 20, y: rect.midY - 16, width: 40, height: 32)
+    let itemRect = NSRect(x: rect.midX - 32, y: rect.midY - 16, width: 64, height: 32)
     foreground.withAlphaComponent(0.12).setFill()
     NSBezierPath(roundedRect: itemRect, xRadius: 7, yRadius: 7).fill()
 
@@ -35,12 +35,18 @@ func drawStatusBar(in rect: NSRect, background: NSColor, foreground: NSColor, la
     let configuredIcon = icon.withSymbolConfiguration(configuration) ?? icon
     configuredIcon.isTemplate = true
 
-    let iconRect = NSRect(x: itemRect.midX - 9, y: itemRect.midY - 9, width: 18, height: 18)
+    let iconRect = NSRect(x: itemRect.minX + 9, y: itemRect.midY - 9, width: 18, height: 18)
     NSGraphicsContext.saveGraphicsState()
     foreground.setFill()
     iconRect.fill()
     configuredIcon.draw(in: iconRect, from: .zero, operation: .destinationIn, fraction: 1)
     NSGraphicsContext.restoreGraphicsState()
+
+    let badgeAttributes: [NSAttributedString.Key: Any] = [
+        .font: NSFont.monospacedSystemFont(ofSize: 13, weight: .semibold),
+        .foregroundColor: foreground.withAlphaComponent(0.92)
+    ]
+    "PP".draw(at: NSPoint(x: iconRect.maxX + 5, y: itemRect.midY - 8), withAttributes: badgeAttributes)
 
     let attributes: [NSAttributedString.Key: Any] = [
         .font: NSFont.systemFont(ofSize: 13, weight: .medium),
