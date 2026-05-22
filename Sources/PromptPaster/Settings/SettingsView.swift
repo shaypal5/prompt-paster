@@ -92,6 +92,75 @@ struct SettingsView: View {
                 doubleControlTimingChanged()
             }
 
+            Section("Overlay Display") {
+                Picker("Overlay size", selection: $settingsStore.overlaySizeMode) {
+                    ForEach(OverlaySizeMode.allCases) { mode in
+                        Text(mode.displayName).tag(mode)
+                    }
+                }
+
+                if settingsStore.overlaySizeMode == .percentageOfDisplay {
+                    Stepper(
+                        "Display size: \(settingsStore.overlayDisplayPercentageDisplayValue)",
+                        value: Binding(
+                            get: {
+                                settingsStore.overlayDisplayPercentage
+                            },
+                            set: { percentage in
+                                settingsStore.setOverlayDisplayPercentage(percentage)
+                            }
+                        ),
+                        in: SettingsStore.minimumOverlayDisplayPercentage...SettingsStore.maximumOverlayDisplayPercentage,
+                        step: 5
+                    )
+                } else {
+                    HStack {
+                        Text("Fixed size")
+                        Spacer()
+                        PixelField(
+                            title: "Width",
+                            value: Binding(
+                                get: {
+                                    settingsStore.overlayFixedWidthPixels
+                                },
+                                set: { width in
+                                    settingsStore.setOverlayFixedWidthPixels(width)
+                                }
+                            )
+                        )
+                        Text("x")
+                            .foregroundStyle(.secondary)
+                        PixelField(
+                            title: "Height",
+                            value: Binding(
+                                get: {
+                                    settingsStore.overlayFixedHeightPixels
+                                },
+                                set: { height in
+                                    settingsStore.setOverlayFixedHeightPixels(height)
+                                }
+                            )
+                        )
+                        Text("px")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Stepper(
+                    "Prompt preview: \(settingsStore.promptPreviewCharacterLimitDisplayValue)",
+                    value: Binding(
+                        get: {
+                            settingsStore.promptPreviewCharacterLimit
+                        },
+                        set: { characterLimit in
+                            settingsStore.setPromptPreviewCharacterLimit(characterLimit)
+                        }
+                    ),
+                    in: SettingsStore.minimumPromptPreviewCharacterLimit...SettingsStore.maximumPromptPreviewCharacterLimit,
+                    step: 20
+                )
+            }
+
             Section("Prompt Library") {
                 LabeledContent("Storage", value: promptStore.libraryURL.path)
                 LabeledContent("Loaded prompts", value: "\(promptStore.library?.prompts.count ?? 0)")
@@ -160,6 +229,18 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .padding()
-        .frame(minWidth: 520, minHeight: 420)
+        .frame(minWidth: 540, minHeight: 560)
+    }
+}
+
+private struct PixelField: View {
+    let title: String
+    @Binding var value: Int
+
+    var body: some View {
+        TextField(title, value: $value, format: .number)
+            .textFieldStyle(.roundedBorder)
+            .frame(width: 76)
+            .multilineTextAlignment(.trailing)
     }
 }

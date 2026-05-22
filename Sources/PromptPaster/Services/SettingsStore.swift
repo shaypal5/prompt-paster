@@ -66,11 +66,28 @@ final class SettingsStore: ObservableObject {
     private enum Keys {
         static let triggerMode = "settings.triggerMode"
         static let doubleControlThresholdMilliseconds = "settings.doubleControlThresholdMilliseconds"
+        static let overlaySizeMode = "settings.overlaySizeMode"
+        static let overlayDisplayPercentage = "settings.overlayDisplayPercentage"
+        static let overlayFixedWidthPixels = "settings.overlayFixedWidthPixels"
+        static let overlayFixedHeightPixels = "settings.overlayFixedHeightPixels"
+        static let promptPreviewCharacterLimit = "settings.promptPreviewCharacterLimit"
     }
 
-    static let defaultDoubleControlThresholdMilliseconds = 350
-    static let minimumDoubleControlThresholdMilliseconds = 250
-    static let maximumDoubleControlThresholdMilliseconds = 700
+    nonisolated static let defaultDoubleControlThresholdMilliseconds = 350
+    nonisolated static let minimumDoubleControlThresholdMilliseconds = 250
+    nonisolated static let maximumDoubleControlThresholdMilliseconds = 700
+    nonisolated static let defaultOverlayDisplayPercentage = OverlayDisplayConfiguration.defaultDisplayPercentage
+    nonisolated static let minimumOverlayDisplayPercentage = OverlayDisplayConfiguration.minimumDisplayPercentage
+    nonisolated static let maximumOverlayDisplayPercentage = OverlayDisplayConfiguration.maximumDisplayPercentage
+    nonisolated static let defaultOverlayFixedWidthPixels = OverlayDisplayConfiguration.defaultFixedWidthPixels
+    nonisolated static let defaultOverlayFixedHeightPixels = OverlayDisplayConfiguration.defaultFixedHeightPixels
+    nonisolated static let minimumOverlayWidthPixels = OverlayDisplayConfiguration.minimumFixedModeWidthPixels
+    nonisolated static let maximumOverlayWidthPixels = OverlayDisplayConfiguration.maximumFixedModeWidthPixels
+    nonisolated static let minimumOverlayHeightPixels = OverlayDisplayConfiguration.minimumFixedModeHeightPixels
+    nonisolated static let maximumOverlayHeightPixels = OverlayDisplayConfiguration.maximumFixedModeHeightPixels
+    nonisolated static let defaultPromptPreviewCharacterLimit = 260
+    nonisolated static let minimumPromptPreviewCharacterLimit = 40
+    nonisolated static let maximumPromptPreviewCharacterLimit = 600
 
     @Published var triggerMode: TriggerMode {
         didSet {
@@ -79,6 +96,15 @@ final class SettingsStore: ObservableObject {
     }
 
     @Published private(set) var doubleControlThresholdMilliseconds: Int
+    @Published var overlaySizeMode: OverlaySizeMode {
+        didSet {
+            defaults.set(overlaySizeMode.rawValue, forKey: Keys.overlaySizeMode)
+        }
+    }
+    @Published private(set) var overlayDisplayPercentage: Int
+    @Published private(set) var overlayFixedWidthPixels: Int
+    @Published private(set) var overlayFixedHeightPixels: Int
+    @Published private(set) var promptPreviewCharacterLimit: Int
 
     @Published private(set) var launchAtLoginStatus: LaunchAtLoginStatus
     @Published private(set) var launchAtLoginErrorMessage: String?
@@ -107,8 +133,52 @@ final class SettingsStore: ObservableObject {
             self.doubleControlThresholdMilliseconds = Self.clampedThreshold(storedThreshold)
         }
 
+        if let rawOverlaySizeMode = defaults.string(forKey: Keys.overlaySizeMode),
+           let overlaySizeMode = OverlaySizeMode(rawValue: rawOverlaySizeMode) {
+            self.overlaySizeMode = overlaySizeMode
+        } else {
+            self.overlaySizeMode = .percentageOfDisplay
+        }
+        self.overlayDisplayPercentage = Self.clampedOverlayDisplayPercentage(
+            Self.storedInt(
+                defaults,
+                key: Keys.overlayDisplayPercentage,
+                defaultValue: Self.defaultOverlayDisplayPercentage
+            )
+        )
+        self.overlayFixedWidthPixels = Self.clampedOverlayFixedWidthPixels(
+            Self.storedInt(
+                defaults,
+                key: Keys.overlayFixedWidthPixels,
+                defaultValue: Self.defaultOverlayFixedWidthPixels
+            )
+        )
+        self.overlayFixedHeightPixels = Self.clampedOverlayFixedHeightPixels(
+            Self.storedInt(
+                defaults,
+                key: Keys.overlayFixedHeightPixels,
+                defaultValue: Self.defaultOverlayFixedHeightPixels
+            )
+        )
+        self.promptPreviewCharacterLimit = Self.clampedPromptPreviewCharacterLimit(
+            Self.storedInt(
+                defaults,
+                key: Keys.promptPreviewCharacterLimit,
+                defaultValue: Self.defaultPromptPreviewCharacterLimit
+            )
+        )
+
         self.launchAtLoginStatus = loginItemManager.launchAtLoginStatus
         self.launchAtLoginErrorMessage = nil
+    }
+
+    var overlayDisplayConfiguration: OverlayDisplayConfiguration {
+        OverlayDisplayConfiguration(
+            sizeMode: overlaySizeMode,
+            displayPercentage: overlayDisplayPercentage,
+            fixedWidth: overlayFixedWidthPixels,
+            fixedHeight: overlayFixedHeightPixels
+        )
     }
 
     var doubleControlConfiguration: DoubleControlTapConfiguration {
@@ -122,6 +192,18 @@ final class SettingsStore: ObservableObject {
         "\(doubleControlThresholdMilliseconds) ms"
     }
 
+    var overlayDisplayPercentageDisplayValue: String {
+        "\(overlayDisplayPercentage)%"
+    }
+
+    var overlayFixedSizeDisplayValue: String {
+        "\(overlayFixedWidthPixels) x \(overlayFixedHeightPixels) px"
+    }
+
+    var promptPreviewCharacterLimitDisplayValue: String {
+        "\(promptPreviewCharacterLimit) characters"
+    }
+
     func refreshLaunchAtLoginStatus() {
         launchAtLoginStatus = loginItemManager.launchAtLoginStatus
     }
@@ -129,6 +211,26 @@ final class SettingsStore: ObservableObject {
     func setDoubleControlThresholdMilliseconds(_ threshold: Int) {
         doubleControlThresholdMilliseconds = Self.clampedThreshold(threshold)
         defaults.set(doubleControlThresholdMilliseconds, forKey: Keys.doubleControlThresholdMilliseconds)
+    }
+
+    func setOverlayDisplayPercentage(_ percentage: Int) {
+        overlayDisplayPercentage = Self.clampedOverlayDisplayPercentage(percentage)
+        defaults.set(overlayDisplayPercentage, forKey: Keys.overlayDisplayPercentage)
+    }
+
+    func setOverlayFixedWidthPixels(_ width: Int) {
+        overlayFixedWidthPixels = Self.clampedOverlayFixedWidthPixels(width)
+        defaults.set(overlayFixedWidthPixels, forKey: Keys.overlayFixedWidthPixels)
+    }
+
+    func setOverlayFixedHeightPixels(_ height: Int) {
+        overlayFixedHeightPixels = Self.clampedOverlayFixedHeightPixels(height)
+        defaults.set(overlayFixedHeightPixels, forKey: Keys.overlayFixedHeightPixels)
+    }
+
+    func setPromptPreviewCharacterLimit(_ characterLimit: Int) {
+        promptPreviewCharacterLimit = Self.clampedPromptPreviewCharacterLimit(characterLimit)
+        defaults.set(promptPreviewCharacterLimit, forKey: Keys.promptPreviewCharacterLimit)
     }
 
     func setLaunchAtLoginEnabled(_ isEnabled: Bool) {
@@ -151,6 +253,34 @@ final class SettingsStore: ObservableObject {
             maximumDoubleControlThresholdMilliseconds,
             max(minimumDoubleControlThresholdMilliseconds, threshold)
         )
+    }
+
+    private static func clampedOverlayDisplayPercentage(_ percentage: Int) -> Int {
+        min(maximumOverlayDisplayPercentage, max(minimumOverlayDisplayPercentage, percentage))
+    }
+
+    private static func clampedOverlayFixedWidthPixels(_ width: Int) -> Int {
+        min(maximumOverlayWidthPixels, max(minimumOverlayWidthPixels, width))
+    }
+
+    private static func clampedOverlayFixedHeightPixels(_ height: Int) -> Int {
+        min(maximumOverlayHeightPixels, max(minimumOverlayHeightPixels, height))
+    }
+
+    private static func clampedPromptPreviewCharacterLimit(_ characterLimit: Int) -> Int {
+        min(
+            maximumPromptPreviewCharacterLimit,
+            max(minimumPromptPreviewCharacterLimit, characterLimit)
+        )
+    }
+
+    private static func storedInt(
+        _ defaults: UserDefaults,
+        key: String,
+        defaultValue: Int
+    ) -> Int {
+        let storedValue = defaults.integer(forKey: key)
+        return storedValue == 0 ? defaultValue : storedValue
     }
 }
 
