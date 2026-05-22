@@ -61,8 +61,10 @@ scripts/
 - App delegate and menu actions: `Sources/PromptPaster/App/AppDelegate.swift`
 - Menu-bar template icon drawing: `Sources/PromptPaster/App/StatusItemIcon.swift`
 - Overlay window management: `Sources/PromptPaster/Overlay/OverlayWindowController.swift`
-- Overlay UI and keyboard selection state: `Sources/PromptPaster/Overlay/PromptOverlayView.swift`
-- Pure overlay state helpers: `Sources/PromptPaster/Overlay/PromptOverlayState.swift`
+- Overlay UI, adaptive prompt-card grid, and keyboard selection state:
+  `Sources/PromptPaster/Overlay/PromptOverlayView.swift`
+- Pure overlay state and smart card layout helpers:
+  `Sources/PromptPaster/Overlay/PromptOverlayState.swift`
 - Fallback global hotkey registration: `Sources/PromptPaster/Services/HotkeyController.swift`
 - Persisted preferences and launch-at-login state: `Sources/PromptPaster/Services/SettingsStore.swift`
 
@@ -87,8 +89,12 @@ Default user library path:
 - Trigger mode, double-Control timing, launch-at-login state, overlay display
   sizing, and prompt preview character limits are managed by `SettingsStore`.
 - Keyboard event bridge: `Sources/PromptPaster/Overlay/OverlayKeyCaptureView.swift`
-- Current overlay scope: browse, search, filter, navigate, copy selected prompts,
-  close after successful copy, and keep the overlay open on clipboard failure.
+- Current overlay scope: browse prompts as adaptive rectangular cards, search,
+  filter, navigate, copy selected prompts, close after successful copy, and keep
+  the overlay open on clipboard failure.
+- Prompt cards use width-based column counts plus deterministic span/height
+  helpers so dense prompts can take more room without changing result order or
+  shortcut assignment.
 
 ## Configuration and Packaging
 

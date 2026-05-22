@@ -13,6 +13,7 @@ struct PromptOverlayView: View {
     @State private var selectedCategoryID = PromptCategoryFilter.all.id
     @State private var selectedPromptID: Prompt.ID?
     @State private var copyStatusMessage: String?
+    @State private var promptGridColumnCount = 1
     @FocusState private var isSearchFocused: Bool
 
     init(
@@ -45,13 +46,6 @@ struct PromptOverlayView: View {
             query: query,
             selectedCategoryID: selectedCategoryID
         )
-    }
-
-    private var selectedIndex: Int? {
-        guard let selectedPromptID else {
-            return nil
-        }
-        return visiblePrompts.firstIndex { $0.id == selectedPromptID }
     }
 
     private var actions: PromptOverlayActions {
@@ -105,6 +99,9 @@ struct PromptOverlayView: View {
         .onChange(of: prompts) { _, _ in
             keepCategoryVisible()
             keepSelectionVisible()
+        }
+        .onPreferenceChange(PromptGridColumnCountPreferenceKey.self) { columnCount in
+            promptGridColumnCount = columnCount
         }
     }
 
@@ -205,24 +202,53 @@ struct PromptOverlayView: View {
                 detail: emptyState.detail
             )
         } else {
-            ScrollView {
-                LazyVStack(spacing: 8) {
-                    ForEach(Array(visiblePrompts.enumerated()), id: \.element.id) { index, prompt in
-                        PromptRowView(
-                            prompt: prompt,
-                            shortcutBadge: index < 9 ? "\(index + 1)" : nil,
-                            isSelected: prompt.id == selectedPromptID,
-                            previewCharacterLimit: settingsStore.promptPreviewCharacterLimit
-                        )
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            selectPrompt(at: index)
+            GeometryReader { proxy in
+                let columnCount = PromptOverlayState.promptCardColumnCount(for: proxy.size.width)
+                ScrollView {
+                    LazyVGrid(
+                        columns: promptGridColumns(count: columnCount),
+                        alignment: .leading,
+                        spacing: 10
+                    ) {
+                        ForEach(Array(visiblePrompts.enumerated()), id: \.element.id) { index, prompt in
+                            PromptCardView(
+                                prompt: prompt,
+                                shortcutBadge: index < 9 ? "\(index + 1)" : nil,
+                                isSelected: prompt.id == selectedPromptID,
+                                previewCharacterLimit: settingsStore.promptPreviewCharacterLimit
+                            )
+                            .gridCellColumns(
+                                min(
+                                    columnCount,
+                                    PromptOverlayState.promptCardColumnSpan(
+                                        for: prompt,
+                                        availableColumns: columnCount,
+                                        previewCharacterLimit: settingsStore.promptPreviewCharacterLimit
+                                    )
+                                )
+                            )
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                selectPrompt(at: index)
+                            }
                         }
                     }
+                    .padding(.vertical, 2)
                 }
-                .padding(.vertical, 2)
+                .preference(key: PromptGridColumnCountPreferenceKey.self, value: columnCount)
             }
         }
+    }
+
+    private func promptGridColumns(count: Int) -> [GridItem] {
+        Array(
+            repeating: GridItem(
+                .flexible(minimum: PromptOverlayState.promptCardMinimumWidth),
+                spacing: PromptOverlayState.promptCardSpacing,
+                alignment: .top
+            ),
+            count: count
+        )
     }
 
     private func handleKeyDown(_ event: NSEvent) -> Bool {
@@ -237,11 +263,17 @@ struct PromptOverlayView: View {
         case 36, 76:
             selectCurrentPrompt()
             return true
-        case 125:
+        case 123:
+            moveSelection(by: -1)
+            return true
+        case 124:
             moveSelection(by: 1)
             return true
+        case 125:
+            moveSelectionVertically(direction: 1)
+            return true
         case 126:
-            moveSelection(by: -1)
+            moveSelectionVertically(direction: -1)
             return true
         default:
             guard let digit = event.charactersIgnoringModifiers.flatMap(Int.init),
@@ -266,6 +298,17 @@ struct PromptOverlayView: View {
             currentID: selectedPromptID,
             visiblePrompts: visiblePrompts,
             offset: offset
+        )
+        copyStatusMessage = nil
+    }
+
+    private func moveSelectionVertically(direction: Int) {
+        selectedPromptID = PromptOverlayState.selectedPromptIDMovingVertically(
+            currentID: selectedPromptID,
+            visiblePrompts: visiblePrompts,
+            availableColumns: promptGridColumnCount,
+            previewCharacterLimit: settingsStore.promptPreviewCharacterLimit,
+            direction: direction
         )
         copyStatusMessage = nil
     }
@@ -313,70 +356,103 @@ struct PromptOverlayView: View {
     }
 }
 
-private struct PromptRowView: View {
+private struct PromptGridColumnCountPreferenceKey: PreferenceKey {
+    static let defaultValue = 1
+
+    static func reduce(value: inout Int, nextValue: () -> Int) {
+        value = nextValue()
+    }
+}
+
+private struct PromptCardView: View {
     let prompt: Prompt
     let shortcutBadge: String?
     let isSelected: Bool
     let previewCharacterLimit: Int
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 7) {
-                HStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
+                VStack(alignment: .leading, spacing: 6) {
                     Text(prompt.title)
                         .font(.headline)
-                        .lineLimit(1)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
 
-                    if let category = prompt.category, !category.isEmpty {
-                        Text(category)
-                            .font(.caption.weight(.semibold))
+                    categoryBadge
+                }
+
+                Spacer(minLength: 8)
+
+                shortcutBadgeView
+            }
+
+            Text(PromptOverlayState.previewText(
+                for: prompt.body,
+                characterLimit: previewCharacterLimit
+            ))
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .lineLimit(PromptOverlayState.previewLineLimit(for: previewCharacterLimit))
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            if !prompt.tags.isEmpty {
+                FlowLayout(spacing: 6, lineSpacing: 6) {
+                    ForEach(Array(prompt.tags.prefix(5).enumerated()), id: \.offset) { _, tag in
+                        Text(tag)
+                            .font(.caption)
                             .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
                             .padding(.horizontal, 7)
                             .padding(.vertical, 3)
-                            .background(.thinMaterial, in: Capsule())
+                            .frame(maxWidth: 140, alignment: .leading)
+                            .background(.background.opacity(0.45), in: Capsule())
                     }
                 }
-
-                Text(PromptOverlayState.previewText(
-                    for: prompt.body,
-                    characterLimit: previewCharacterLimit
-                ))
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(PromptOverlayState.previewLineLimit(for: previewCharacterLimit))
-                    .fixedSize(horizontal: false, vertical: true)
-
-                if !prompt.tags.isEmpty {
-                    FlowLayout(spacing: 6, lineSpacing: 6) {
-                        ForEach(Array(prompt.tags.prefix(5).enumerated()), id: \.offset) { _, tag in
-                            Text(tag)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .padding(.horizontal, 7)
-                                .padding(.vertical, 3)
-                                .background(.background.opacity(0.45), in: Capsule())
-                        }
-                    }
-                }
-            }
-
-            Spacer(minLength: 12)
-
-            if let shortcutBadge {
-                Text(shortcutBadge)
-                    .font(.headline.monospacedDigit().weight(.bold))
-                    .foregroundStyle(isSelected ? .white : .secondary)
-                    .frame(width: 30, height: 30)
-                    .background(badgeBackgroundStyle, in: RoundedRectangle(cornerRadius: 7))
             }
         }
-        .padding(13)
-        .frame(maxWidth: .infinity, minHeight: 92, alignment: .topLeading)
-        .background(rowBackgroundStyle, in: RoundedRectangle(cornerRadius: 10))
+        .padding(14)
+        .frame(
+            maxWidth: .infinity,
+            minHeight: PromptOverlayState.promptCardMinimumHeight(
+                for: prompt,
+                previewCharacterLimit: previewCharacterLimit
+            ),
+            alignment: .topLeading
+        )
+        .background(cardBackgroundStyle, in: RoundedRectangle(cornerRadius: 10))
         .overlay(
             RoundedRectangle(cornerRadius: 10)
-                .stroke(rowStrokeStyle, lineWidth: 1)
+                .stroke(cardStrokeStyle, lineWidth: 1)
         )
+    }
+
+    @ViewBuilder
+    private var categoryBadge: some View {
+        if let category = prompt.category, !category.isEmpty {
+            Text(category)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
+                .frame(maxWidth: 160, alignment: .leading)
+                .background(.thinMaterial, in: Capsule())
+        }
+    }
+
+    @ViewBuilder
+    private var shortcutBadgeView: some View {
+        if let shortcutBadge {
+            Text(shortcutBadge)
+                .font(.headline.monospacedDigit().weight(.bold))
+                .foregroundStyle(isSelected ? .white : .secondary)
+                .frame(width: 30, height: 30)
+                .background(badgeBackgroundStyle, in: RoundedRectangle(cornerRadius: 7))
+        }
     }
 
     private var badgeBackgroundStyle: AnyShapeStyle {
@@ -385,13 +461,13 @@ private struct PromptRowView: View {
             : AnyShapeStyle(.background.opacity(0.6))
     }
 
-    private var rowBackgroundStyle: AnyShapeStyle {
+    private var cardBackgroundStyle: AnyShapeStyle {
         isSelected
             ? AnyShapeStyle(.selection.opacity(0.18))
             : AnyShapeStyle(.background.opacity(0.56))
     }
 
-    private var rowStrokeStyle: AnyShapeStyle {
+    private var cardStrokeStyle: AnyShapeStyle {
         isSelected
             ? AnyShapeStyle(Color.accentColor.opacity(0.65))
             : AnyShapeStyle(Color(nsColor: .separatorColor).opacity(0.35))
@@ -436,7 +512,9 @@ private struct FlowLayout: Layout {
         var usedWidth: CGFloat = 0
 
         for subview in subviews {
-            let size = subview.sizeThatFits(.unspecified)
+            let proposedSize = ProposedViewSize(width: maxWidth, height: nil)
+            let measuredSize = subview.sizeThatFits(proposedSize)
+            let size = CGSize(width: min(measuredSize.width, maxWidth), height: measuredSize.height)
             if cursor.x > 0, cursor.x + size.width > maxWidth {
                 cursor.x = 0
                 cursor.y += lineHeight + lineSpacing
