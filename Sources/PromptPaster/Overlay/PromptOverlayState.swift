@@ -17,7 +17,7 @@ struct PromptOverlayState {
     static func statusMessages(
         message: String?,
         validation: PromptLibraryValidation?,
-        acknowledgement: String?
+        copyStatusMessage: String?
     ) -> [String] {
         var messages: [String] = []
 
@@ -29,8 +29,8 @@ struct PromptOverlayState {
             messages.append("Library loaded with \(validation.warnings.count) warning\(validation.warnings.count == 1 ? "" : "s").")
         }
 
-        if let acknowledgement {
-            messages.append(acknowledgement)
+        if let copyStatusMessage {
+            messages.append(copyStatusMessage)
         }
 
         return messages
@@ -96,4 +96,5 @@ struct PromptOverlayState {
         let nextIndex = min(max(currentIndex + offset, 0), visiblePrompts.count - 1)
         return visiblePrompts[nextIndex].id
     }
+
 }

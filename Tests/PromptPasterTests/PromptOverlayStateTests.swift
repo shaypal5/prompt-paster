@@ -20,6 +20,22 @@ final class PromptOverlayStateTests: XCTestCase {
         XCTAssertTrue(emptyState?.detail.contains("The data could not be read.") == true)
     }
 
+    func testStatusMessagesIncludeCopyFailureAfterLibraryWarnings() {
+        let messages = PromptOverlayState.statusMessages(
+            message: "Reloaded 3 prompts.",
+            validation: PromptLibraryValidation(warnings: [
+                .shortcutConflict(shortcut: "1", promptIDs: ["first", "second"])
+            ]),
+            copyStatusMessage: "Could not copy \"First\". Clipboard write failed."
+        )
+
+        XCTAssertEqual(messages, [
+            "Reloaded 3 prompts.",
+            "Library loaded with 1 warning.",
+            "Could not copy \"First\". Clipboard write failed."
+        ])
+    }
+
     func testEmptyLibraryAndEmptySearchHaveDifferentStates() {
         XCTAssertEqual(
             PromptOverlayState.emptyState(
