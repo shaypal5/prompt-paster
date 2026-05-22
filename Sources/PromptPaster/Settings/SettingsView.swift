@@ -4,22 +4,58 @@ import SwiftUI
 struct SettingsView: View {
     @ObservedObject var promptStore: PromptStore
     let fallbackHotkeyStatusMessage: String?
+    let doubleControlStatus: DoubleControlTriggerStatus
+    let openAccessibilitySettings: () -> Void
+    let requestAccessibilityPermission: () -> Void
 
-    init(promptStore: PromptStore, fallbackHotkeyStatusMessage: String? = nil) {
+    init(
+        promptStore: PromptStore,
+        fallbackHotkeyStatusMessage: String? = nil,
+        doubleControlStatus: DoubleControlTriggerStatus = .needsAccessibility,
+        openAccessibilitySettings: @escaping () -> Void = {},
+        requestAccessibilityPermission: @escaping () -> Void = {}
+    ) {
         self.promptStore = promptStore
         self.fallbackHotkeyStatusMessage = fallbackHotkeyStatusMessage
+        self.doubleControlStatus = doubleControlStatus
+        self.openAccessibilitySettings = openAccessibilitySettings
+        self.requestAccessibilityPermission = requestAccessibilityPermission
     }
 
     var body: some View {
         Form {
             Section("Trigger") {
-                LabeledContent("Active trigger", value: HotkeyDisplay.fallbackShortcut)
-                LabeledContent("Double Control", value: HotkeyDisplay.doubleControlStatus)
+                LabeledContent("Fallback hotkey", value: HotkeyDisplay.fallbackShortcut)
+                LabeledContent(
+                    HotkeyDisplay.doubleControlShortcut,
+                    value: doubleControlStatus.displayValue
+                )
+                LabeledContent("Double Control timing", value: HotkeyDisplay.doubleControlThreshold)
 
                 if let fallbackHotkeyStatusMessage {
                     Text(fallbackHotkeyStatusMessage)
                         .font(.footnote)
                         .foregroundStyle(.red)
+                }
+
+                if let doubleControlStatusMessage = doubleControlStatus.message {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(doubleControlStatusMessage)
+                            .font(.footnote)
+                            .foregroundStyle(.orange)
+
+                        if doubleControlStatus.canRequestAccessibilityPermission {
+                            HStack {
+                                Button("Request Accessibility Permission") {
+                                    requestAccessibilityPermission()
+                                }
+
+                                Button("Open Accessibility Settings") {
+                                    openAccessibilitySettings()
+                                }
+                            }
+                        }
+                    }
                 }
             }
 

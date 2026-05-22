@@ -6,10 +6,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyTriggerHandling 
     private var statusItem: NSStatusItem?
     private let promptStore = PromptStore()
     private var fallbackHotkeyStatusMessage: String?
+    private var doubleControlStatus: DoubleControlTriggerStatus = .needsAccessibility
     private lazy var overlayController = OverlayWindowController(promptStore: promptStore)
     private lazy var settingsController = SettingsWindowController(
         promptStore: promptStore,
-        fallbackHotkeyStatusMessage: fallbackHotkeyStatusMessage
+        fallbackHotkeyStatusMessage: fallbackHotkeyStatusMessage,
+        doubleControlStatus: doubleControlStatus,
+        openAccessibilitySettings: { [weak self] in
+            self?.hotkeyController.openAccessibilitySettings()
+        },
+        requestAccessibilityPermission: { [weak self] in
+            self?.requestAccessibilityPermission()
+        }
     )
     private lazy var hotkeyController = HotkeyController(handler: self)
 
@@ -83,6 +91,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyTriggerHandling 
 
     @objc private func openSettings() {
         settingsController.fallbackHotkeyStatusMessage = fallbackHotkeyStatusMessage
+        settingsController.doubleControlStatus = doubleControlStatus
         settingsController.show()
     }
 
@@ -112,11 +121,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, HotkeyTriggerHandling 
 
     private func startFallbackHotkey() {
         do {
-            try hotkeyController.start()
-            fallbackHotkeyStatusMessage = nil
+            let status = try hotkeyController.start()
+            applyHotkeyStatus(status)
         } catch {
             fallbackHotkeyStatusMessage = "Fallback hotkey unavailable. \(error.localizedDescription)"
+            doubleControlStatus = .monitorUnavailable("Double Control not started because fallback hotkey registration failed.")
             NSLog("Prompt Paster fallback hotkey unavailable: \(error.localizedDescription)")
         }
+    }
+
+    private func requestAccessibilityPermission() {
+        let status = hotkeyController.requestAccessibilityPermission()
+        applyHotkeyStatus(status)
+        settingsController.fallbackHotkeyStatusMessage = fallbackHotkeyStatusMessage
+        settingsController.doubleControlStatus = doubleControlStatus
+    }
+
+    private func applyHotkeyStatus(_ status: HotkeyStartupStatus) {
+        fallbackHotkeyStatusMessage = status.fallbackHotkeyStatusMessage
+        doubleControlStatus = status.doubleControlStatus
     }
 }

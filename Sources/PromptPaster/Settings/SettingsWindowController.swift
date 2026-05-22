@@ -5,20 +5,31 @@ import SwiftUI
 final class SettingsWindowController {
     private var window: NSWindow?
     private let promptStore: PromptStore
+    private let openAccessibilitySettings: () -> Void
+    private let requestAccessibilityPermission: () -> Void
     var fallbackHotkeyStatusMessage: String? {
         didSet {
-            window?.contentView = NSHostingView(
-                rootView: SettingsView(
-                    promptStore: promptStore,
-                    fallbackHotkeyStatusMessage: fallbackHotkeyStatusMessage
-                )
-            )
+            refreshContentView()
+        }
+    }
+    var doubleControlStatus: DoubleControlTriggerStatus {
+        didSet {
+            refreshContentView()
         }
     }
 
-    init(promptStore: PromptStore, fallbackHotkeyStatusMessage: String? = nil) {
+    init(
+        promptStore: PromptStore,
+        fallbackHotkeyStatusMessage: String? = nil,
+        doubleControlStatus: DoubleControlTriggerStatus = .needsAccessibility,
+        openAccessibilitySettings: @escaping () -> Void = {},
+        requestAccessibilityPermission: @escaping () -> Void = {}
+    ) {
         self.promptStore = promptStore
         self.fallbackHotkeyStatusMessage = fallbackHotkeyStatusMessage
+        self.doubleControlStatus = doubleControlStatus
+        self.openAccessibilitySettings = openAccessibilitySettings
+        self.requestAccessibilityPermission = requestAccessibilityPermission
     }
 
     func show() {
@@ -38,12 +49,21 @@ final class SettingsWindowController {
         )
         window.title = "Prompt Paster Settings"
         window.isReleasedWhenClosed = false
-        window.contentView = NSHostingView(
-            rootView: SettingsView(
-                promptStore: promptStore,
-                fallbackHotkeyStatusMessage: fallbackHotkeyStatusMessage
-            )
-        )
+        window.contentView = NSHostingView(rootView: makeSettingsView())
         return window
+    }
+
+    private func refreshContentView() {
+        window?.contentView = NSHostingView(rootView: makeSettingsView())
+    }
+
+    private func makeSettingsView() -> SettingsView {
+        SettingsView(
+            promptStore: promptStore,
+            fallbackHotkeyStatusMessage: fallbackHotkeyStatusMessage,
+            doubleControlStatus: doubleControlStatus,
+            openAccessibilitySettings: openAccessibilitySettings,
+            requestAccessibilityPermission: requestAccessibilityPermission
+        )
     }
 }
