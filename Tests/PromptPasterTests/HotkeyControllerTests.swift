@@ -8,6 +8,8 @@ final class HotkeyControllerTests: XCTestCase {
         XCTAssertEqual(HotkeyShortcut.controlOptionSpace.keyCode, UInt32(kVK_Space))
         XCTAssertEqual(HotkeyShortcut.controlOptionSpace.modifiers, UInt32(controlKey | optionKey))
         XCTAssertEqual(HotkeyShortcut.controlOptionSpace.displayName, "Control + Option + Space")
+        XCTAssertEqual(HotkeyDisplay.fallbackShortcut, "Control + Option + Space")
+        XCTAssertEqual(HotkeyDisplay.doubleControlStatus, "Planned for HOTKEY-2")
     }
 
     func testTriggerRouterForwardsHotkeyTriggerToHandler() {

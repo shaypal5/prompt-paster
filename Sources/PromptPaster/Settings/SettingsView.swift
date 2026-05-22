@@ -13,8 +13,8 @@ struct SettingsView: View {
     var body: some View {
         Form {
             Section("Trigger") {
-                LabeledContent("Primary trigger", value: "Double Control")
-                LabeledContent("Fallback hotkey", value: HotkeyDisplay.fallbackShortcut)
+                LabeledContent("Active trigger", value: HotkeyDisplay.fallbackShortcut)
+                LabeledContent("Double Control", value: HotkeyDisplay.doubleControlStatus)
 
                 if let fallbackHotkeyStatusMessage {
                     Text(fallbackHotkeyStatusMessage)

@@ -6,6 +6,7 @@ private let promptPasterFallbackHotKeyID: UInt32 = 1
 
 enum HotkeyDisplay {
     static let fallbackShortcut = HotkeyShortcut.controlOptionSpace.displayName
+    static let doubleControlStatus = "Planned for HOTKEY-2"
 }
 
 struct HotkeyShortcut: Equatable {
