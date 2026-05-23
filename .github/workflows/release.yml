@@ -31,7 +31,7 @@ concurrency:
 jobs:
   release:
     name: Build DMG and publish release
-    runs-on: macos-14
+    runs-on: macos-15
     env:
       TAG_NAME: ${{ github.event_name == 'workflow_dispatch' && inputs.tag_name || github.ref_name }}
       IS_PRERELEASE: ${{ github.event_name == 'workflow_dispatch' && inputs.prerelease || contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'rc') }}
