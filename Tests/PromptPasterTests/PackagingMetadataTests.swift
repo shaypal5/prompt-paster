@@ -65,6 +65,7 @@ final class PackagingMetadataTests: XCTestCase {
         let workflow = try String(contentsOf: workflowURL, encoding: .utf8)
 
         XCTAssertTrue(workflow.contains("workflow_dispatch"))
+        XCTAssertTrue(workflow.contains("runs-on: macos-15"))
         XCTAssertTrue(workflow.contains("push:"))
         XCTAssertTrue(workflow.contains("tags:"))
         XCTAssertTrue(workflow.contains("scripts/build-dmg.sh"))
