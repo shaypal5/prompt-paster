@@ -52,6 +52,7 @@ struct PromptOverlayState {
         )
         return orderedPrompts(
             filteredPrompts,
+            query: query,
             orderingMode: orderingMode,
             usageStats: usageStats
         )
@@ -59,10 +60,12 @@ struct PromptOverlayState {
 
     static func orderedPrompts(
         _ prompts: [Prompt],
+        query: String = "",
         orderingMode: PromptOrderingMode,
         usageStats: [Prompt.ID: PromptUsageStats]
     ) -> [Prompt] {
-        guard orderingMode != .libraryOrder else {
+        let normalizedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard orderingMode != .libraryOrder || !normalizedQuery.isEmpty else {
             return prompts
         }
 
@@ -71,6 +74,14 @@ struct PromptOverlayState {
         )
 
         return prompts.sorted { lhs, rhs in
+            if !normalizedQuery.isEmpty {
+                let lhsRelevance = PromptSearch.searchRelevanceRank(for: lhs, query: normalizedQuery) ?? Int.max
+                let rhsRelevance = PromptSearch.searchRelevanceRank(for: rhs, query: normalizedQuery) ?? Int.max
+                if lhsRelevance != rhsRelevance {
+                    return lhsRelevance < rhsRelevance
+                }
+            }
+
             let lhsStats = usageStats[lhs.id] ?? .empty
             let rhsStats = usageStats[rhs.id] ?? .empty
 

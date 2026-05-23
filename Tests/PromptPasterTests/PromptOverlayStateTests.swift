@@ -168,6 +168,39 @@ final class PromptOverlayStateTests: XCTestCase {
         )
     }
 
+    func testSearchRelevanceOutranksUsageOrderingWhenQueryIsActive() {
+        let searchPrompts = [
+            Prompt(
+                id: "title-match",
+                title: "Merge summary",
+                category: "PR",
+                body: "Short body"
+            ),
+            Prompt(
+                id: "body-match",
+                title: "Daily handoff",
+                category: "Ops",
+                body: "This heavily used prompt mentions merge only in the body."
+            )
+        ]
+
+        XCTAssertEqual(
+            PromptOverlayState.visiblePrompts(
+                prompts: searchPrompts,
+                query: "merge",
+                selectedCategoryID: PromptCategoryFilter.all.id,
+                orderingMode: .mostUsed,
+                usageStats: [
+                    "body-match": PromptUsageStats(
+                        copyCount: 100,
+                        lastCopiedAt: Date(timeIntervalSince1970: 300)
+                    )
+                ]
+            ).map(\.id),
+            ["title-match", "body-match"]
+        )
+    }
+
     func testMostUsedOrderingUsesRecencyThenLibraryOrderAsTieBreakers() {
         XCTAssertEqual(
             PromptOverlayState.orderedPrompts(

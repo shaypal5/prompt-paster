@@ -3,6 +3,7 @@ import SwiftUI
 struct PromptOverlayView: View {
     @ObservedObject var promptStore: PromptStore
     @ObservedObject var settingsStore: SettingsStore
+    @ObservedObject var promptUsageStore: PromptUsageStore
 
     let message: String?
     let clipboard: ClipboardCopying
@@ -19,6 +20,7 @@ struct PromptOverlayView: View {
     init(
         promptStore: PromptStore,
         settingsStore: SettingsStore,
+        promptUsageStore: PromptUsageStore,
         message: String?,
         clipboard: ClipboardCopying = ClipboardService(),
         openSettings: @escaping () -> Void = {},
@@ -26,6 +28,7 @@ struct PromptOverlayView: View {
     ) {
         self.promptStore = promptStore
         self.settingsStore = settingsStore
+        self.promptUsageStore = promptUsageStore
         self.message = message
         self.clipboard = clipboard
         self.openSettings = openSettings
@@ -45,8 +48,8 @@ struct PromptOverlayView: View {
             prompts: prompts,
             query: query,
             selectedCategoryID: selectedCategoryID,
-            orderingMode: settingsStore.promptOrderingMode,
-            usageStats: settingsStore.promptUsageStats
+            orderingMode: settingsStore.promptOrderingMode(for: selectedCategoryID),
+            usageStats: promptUsageStore.statsByPromptID
         )
     }
 
@@ -54,7 +57,7 @@ struct PromptOverlayView: View {
         PromptOverlayActions(
             clipboard: clipboard,
             recordPromptCopy: { promptID in
-                settingsStore.recordPromptCopy(promptID: promptID)
+                promptUsageStore.recordPromptCopy(promptID: promptID)
             }
         )
     }
@@ -128,11 +131,15 @@ struct PromptOverlayView: View {
         .onChange(of: prompts) { _, _ in
             keepCategoryVisible()
             keepSelectionVisible()
+            promptUsageStore.pruneKeepingPromptIDs(Set(prompts.map(\.id)))
         }
         .onChange(of: settingsStore.promptOrderingMode) { _, _ in
             keepSelectionVisible()
         }
-        .onChange(of: settingsStore.promptUsageStats) { _, _ in
+        .onChange(of: settingsStore.promptOrderingOverridesByCategoryID) { _, _ in
+            keepSelectionVisible()
+        }
+        .onChange(of: promptUsageStore.statsByPromptID) { _, _ in
             keepSelectionVisible()
         }
         .onPreferenceChange(PromptGridColumnCountPreferenceKey.self) { columnCount in

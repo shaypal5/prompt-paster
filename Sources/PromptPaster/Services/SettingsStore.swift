@@ -59,13 +59,6 @@ enum PromptOrderingMode: String, CaseIterable, Identifiable {
     }
 }
 
-struct PromptUsageStats: Codable, Equatable {
-    let copyCount: Int
-    let lastCopiedAt: Date?
-
-    static let empty = PromptUsageStats(copyCount: 0, lastCopiedAt: nil)
-}
-
 protocol LoginItemManaging {
     var launchAtLoginStatus: LaunchAtLoginStatus { get }
 
@@ -119,7 +112,7 @@ final class SettingsStore: ObservableObject {
         static let promptPreviewCharacterLimit = "settings.promptPreviewCharacterLimit"
         static let promptSelectionShortcutMode = "settings.promptSelectionShortcutMode"
         static let promptOrderingMode = "settings.promptOrderingMode"
-        static let promptUsageStats = "settings.promptUsageStats"
+        static let promptOrderingOverridesByCategoryID = "settings.promptOrderingOverridesByCategoryID"
     }
 
     nonisolated static let defaultDoubleControlThresholdMilliseconds = 350
@@ -164,7 +157,7 @@ final class SettingsStore: ObservableObject {
             defaults.set(promptOrderingMode.rawValue, forKey: Keys.promptOrderingMode)
         }
     }
-    @Published private(set) var promptUsageStats: [Prompt.ID: PromptUsageStats]
+    @Published private(set) var promptOrderingOverridesByCategoryID: [String: PromptOrderingMode]
 
     @Published private(set) var launchAtLoginStatus: LaunchAtLoginStatus
     @Published private(set) var launchAtLoginErrorMessage: String?
@@ -239,7 +232,10 @@ final class SettingsStore: ObservableObject {
         } else {
             self.promptOrderingMode = .libraryOrder
         }
-        self.promptUsageStats = Self.loadPromptUsageStats(from: defaults, key: Keys.promptUsageStats)
+        self.promptOrderingOverridesByCategoryID = Self.loadOrderingOverrides(
+            from: defaults,
+            key: Keys.promptOrderingOverridesByCategoryID
+        )
 
         self.launchAtLoginStatus = loginItemManager.launchAtLoginStatus
         self.launchAtLoginErrorMessage = nil
@@ -306,13 +302,29 @@ final class SettingsStore: ObservableObject {
         defaults.set(promptPreviewCharacterLimit, forKey: Keys.promptPreviewCharacterLimit)
     }
 
-    func recordPromptCopy(promptID: Prompt.ID, copiedAt: Date = Date()) {
-        let currentStats = promptUsageStats[promptID] ?? .empty
-        promptUsageStats[promptID] = PromptUsageStats(
-            copyCount: currentStats.copyCount + 1,
-            lastCopiedAt: copiedAt
-        )
-        persistPromptUsageStats()
+    func promptOrderingMode(for categoryID: String) -> PromptOrderingMode {
+        guard categoryID != PromptCategoryFilter.all.id else {
+            return promptOrderingMode
+        }
+
+        return promptOrderingOverridesByCategoryID[categoryID] ?? promptOrderingMode
+    }
+
+    func promptOrderingOverride(for categoryID: String) -> PromptOrderingMode? {
+        promptOrderingOverridesByCategoryID[categoryID]
+    }
+
+    func setPromptOrderingOverride(_ override: PromptOrderingMode?, for categoryID: String) {
+        guard categoryID != PromptCategoryFilter.all.id else {
+            return
+        }
+
+        if let override {
+            promptOrderingOverridesByCategoryID[categoryID] = override
+        } else {
+            promptOrderingOverridesByCategoryID.removeValue(forKey: categoryID)
+        }
+        persistPromptOrderingOverrides()
     }
 
     func setLaunchAtLoginEnabled(_ isEnabled: Bool) {
@@ -365,23 +377,29 @@ final class SettingsStore: ObservableObject {
         return storedValue == 0 ? defaultValue : storedValue
     }
 
-    private static func loadPromptUsageStats(
+    private static func loadOrderingOverrides(
         from defaults: UserDefaults,
         key: String
-    ) -> [Prompt.ID: PromptUsageStats] {
+    ) -> [String: PromptOrderingMode] {
         guard let data = defaults.data(forKey: key),
-              let stats = try? JSONDecoder().decode([Prompt.ID: PromptUsageStats].self, from: data)
+              let rawOverrides = try? JSONDecoder().decode([String: String].self, from: data)
         else {
             return [:]
         }
-        return stats
+
+        return rawOverrides.reduce(into: [String: PromptOrderingMode]()) { partialResult, entry in
+            if let mode = PromptOrderingMode(rawValue: entry.value) {
+                partialResult[entry.key] = mode
+            }
+        }
     }
 
-    private func persistPromptUsageStats() {
-        guard let data = try? JSONEncoder().encode(promptUsageStats) else {
+    private func persistPromptOrderingOverrides() {
+        let rawOverrides = promptOrderingOverridesByCategoryID.mapValues(\.rawValue)
+        guard let data = try? JSONEncoder().encode(rawOverrides) else {
             return
         }
-        defaults.set(data, forKey: Keys.promptUsageStats)
+        defaults.set(data, forKey: Keys.promptOrderingOverridesByCategoryID)
     }
 }
 
