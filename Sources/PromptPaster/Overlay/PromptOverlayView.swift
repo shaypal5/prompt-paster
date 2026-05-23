@@ -143,7 +143,9 @@ struct PromptOverlayView: View {
             keepSelectionVisible()
         }
         .onPreferenceChange(PromptGridColumnCountPreferenceKey.self) { columnCount in
-            promptGridColumnCount = columnCount
+            Task { @MainActor in
+                promptGridColumnCount = columnCount
+            }
         }
     }
 
