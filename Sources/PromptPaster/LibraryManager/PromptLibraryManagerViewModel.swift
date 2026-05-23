@@ -20,8 +20,8 @@ final class PromptLibraryManagerViewModel: ObservableObject {
         self.promptStore = promptStore
         selectedPromptID = promptStore.library?.prompts.first?.id
         refreshDraft()
-        promptStoreCancellable = promptStore.objectWillChange.sink { [weak self] _ in
-            self?.objectWillChange.send()
+        promptStoreCancellable = promptStore.$library.sink { [weak self] library in
+            self?.handleLibraryChange(library)
         }
     }
 
@@ -166,6 +166,30 @@ final class PromptLibraryManagerViewModel: ObservableObject {
     }
 
     func refreshDraft() {
+        let refreshedDraft = selectedPrompt.map(PromptLibraryDraft.init(prompt:))
+        draft = refreshedDraft
+        originalDraft = refreshedDraft
+    }
+
+    private func handleLibraryChange(_ library: PromptLibrary?) {
+        objectWillChange.send()
+
+        guard !isDirty else {
+            errorMessage = "Prompt library changed while this editor has unsaved changes. Save or discard changes before continuing."
+            return
+        }
+
+        let prompts = library?.prompts ?? []
+        if let selectedPromptID, prompts.contains(where: { $0.id == selectedPromptID }) {
+            refreshDraft(from: prompts)
+        } else {
+            selectedPromptID = prompts.first?.id
+            refreshDraft(from: prompts)
+        }
+    }
+
+    private func refreshDraft(from prompts: [Prompt]) {
+        let selectedPrompt = selectedPromptID.flatMap { id in prompts.first { $0.id == id } }
         let refreshedDraft = selectedPrompt.map(PromptLibraryDraft.init(prompt:))
         draft = refreshedDraft
         originalDraft = refreshedDraft

@@ -91,6 +91,44 @@ final class PromptLibraryManagerViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.prompts.map(\.title), ["Changed"])
     }
 
+    func testExternalStoreChangeRefreshesCleanDraft() throws {
+        let store = try makeLoadedStore(prompts: [
+            Prompt(id: "one", title: "One", body: "One body")
+        ])
+        let viewModel = PromptLibraryManagerViewModel(promptStore: store)
+
+        try store.save(PromptLibrary(prompts: [
+            Prompt(id: "one", title: "Changed", body: "Changed body")
+        ]))
+
+        XCTAssertEqual(viewModel.selectedPromptID, "one")
+        XCTAssertEqual(viewModel.draft?.title, "Changed")
+        XCTAssertEqual(viewModel.draft?.body, "Changed body")
+        XCTAssertFalse(viewModel.isDirty)
+    }
+
+    func testExternalStoreChangeDoesNotDiscardDirtyDraft() throws {
+        let store = try makeLoadedStore(prompts: [
+            Prompt(id: "one", title: "One", body: "One body")
+        ])
+        let viewModel = PromptLibraryManagerViewModel(promptStore: store)
+
+        var draft = try XCTUnwrap(viewModel.draft)
+        draft.title = "Unsaved"
+        viewModel.updateDraft(draft)
+
+        try store.save(PromptLibrary(prompts: [
+            Prompt(id: "one", title: "External", body: "External body")
+        ]))
+
+        XCTAssertEqual(viewModel.draft?.title, "Unsaved")
+        XCTAssertTrue(viewModel.isDirty)
+        XCTAssertEqual(
+            viewModel.errorMessage,
+            "Prompt library changed while this editor has unsaved changes. Save or discard changes before continuing."
+        )
+    }
+
     private func makeLoadedStore(prompts: [Prompt]) throws -> PromptStore {
         let rootURL = makeTemporaryDirectory()
         let seedURL = rootURL.appendingPathComponent("SeedPrompts.json")
