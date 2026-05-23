@@ -44,12 +44,19 @@ struct PromptOverlayView: View {
         PromptOverlayState.visiblePrompts(
             prompts: prompts,
             query: query,
-            selectedCategoryID: selectedCategoryID
+            selectedCategoryID: selectedCategoryID,
+            orderingMode: settingsStore.promptOrderingMode,
+            usageStats: settingsStore.promptUsageStats
         )
     }
 
     private var actions: PromptOverlayActions {
-        PromptOverlayActions(clipboard: clipboard)
+        PromptOverlayActions(
+            clipboard: clipboard,
+            recordPromptCopy: { promptID in
+                settingsStore.recordPromptCopy(promptID: promptID)
+            }
+        )
     }
 
     private var shouldShowPromptShortcutBadges: Bool {
@@ -120,6 +127,12 @@ struct PromptOverlayView: View {
         }
         .onChange(of: prompts) { _, _ in
             keepCategoryVisible()
+            keepSelectionVisible()
+        }
+        .onChange(of: settingsStore.promptOrderingMode) { _, _ in
+            keepSelectionVisible()
+        }
+        .onChange(of: settingsStore.promptUsageStats) { _, _ in
             keepSelectionVisible()
         }
         .onPreferenceChange(PromptGridColumnCountPreferenceKey.self) { columnCount in

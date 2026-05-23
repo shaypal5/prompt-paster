@@ -165,6 +165,12 @@ struct SettingsView: View {
                         Text(mode.displayName).tag(mode)
                     }
                 }
+
+                Picker("Prompt order", selection: $settingsStore.promptOrderingMode) {
+                    ForEach(PromptOrderingMode.allCases) { mode in
+                        Text(mode.displayName).tag(mode)
+                    }
+                }
             }
 
             Section("Prompt Library") {

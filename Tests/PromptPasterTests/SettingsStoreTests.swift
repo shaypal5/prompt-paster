@@ -18,6 +18,8 @@ final class SettingsStoreTests: XCTestCase {
         XCTAssertEqual(store.overlayFixedHeightPixels, 720)
         XCTAssertEqual(store.promptPreviewCharacterLimit, 260)
         XCTAssertEqual(store.promptSelectionShortcutMode, .spatialLetters)
+        XCTAssertEqual(store.promptOrderingMode, .libraryOrder)
+        XCTAssertEqual(store.promptUsageStats, [:])
         XCTAssertEqual(store.launchAtLoginStatus, .disabled)
     }
 
@@ -33,6 +35,7 @@ final class SettingsStoreTests: XCTestCase {
         store.setOverlayFixedHeightPixels(840)
         store.setPromptPreviewCharacterLimit(180)
         store.promptSelectionShortcutMode = .numbers
+        store.promptOrderingMode = .mostUsed
 
         let reloadedStore = SettingsStore(defaults: defaults, loginItemManager: FakeLoginItemManager())
         XCTAssertEqual(reloadedStore.triggerMode, .fallbackHotkeyOnly)
@@ -43,6 +46,28 @@ final class SettingsStoreTests: XCTestCase {
         XCTAssertEqual(reloadedStore.overlayFixedHeightPixels, 840)
         XCTAssertEqual(reloadedStore.promptPreviewCharacterLimit, 180)
         XCTAssertEqual(reloadedStore.promptSelectionShortcutMode, .numbers)
+        XCTAssertEqual(reloadedStore.promptOrderingMode, .mostUsed)
+    }
+
+    func testRecordsAndPersistsPromptUsageStats() {
+        let defaults = makeDefaults()
+        let store = SettingsStore(defaults: defaults, loginItemManager: FakeLoginItemManager())
+        let firstCopyDate = Date(timeIntervalSince1970: 1_700_000_000)
+        let secondCopyDate = Date(timeIntervalSince1970: 1_700_000_100)
+
+        store.recordPromptCopy(promptID: "handoff", copiedAt: firstCopyDate)
+        store.recordPromptCopy(promptID: "handoff", copiedAt: secondCopyDate)
+        store.recordPromptCopy(promptID: "merge-check", copiedAt: firstCopyDate)
+
+        let reloadedStore = SettingsStore(defaults: defaults, loginItemManager: FakeLoginItemManager())
+        XCTAssertEqual(
+            reloadedStore.promptUsageStats["handoff"],
+            PromptUsageStats(copyCount: 2, lastCopiedAt: secondCopyDate)
+        )
+        XCTAssertEqual(
+            reloadedStore.promptUsageStats["merge-check"],
+            PromptUsageStats(copyCount: 1, lastCopiedAt: firstCopyDate)
+        )
     }
 
     func testClampsPersistedThresholdIntoSupportedRange() {

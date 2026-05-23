@@ -578,6 +578,18 @@ Tasks:
 - Keep usage stats local and out of the seed prompt file unless explicitly
   exported later.
 
+Implementation decision:
+
+- `prompts.json` order remains the library/default order.
+- Search and category filters narrow the visible prompt set first.
+- The selected global ordering mode then sorts the filtered set.
+- Frequency order uses copy count descending, then last copied timestamp
+  descending, then library order.
+- Recently used order uses last copied timestamp descending, then copy count
+  descending, then library order.
+- Usage stats persist locally by prompt ID in user defaults and are updated only
+  after a successful clipboard copy.
+
 Validation:
 
 - Copying prompts updates local usage stats.

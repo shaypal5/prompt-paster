@@ -38,6 +38,34 @@ enum PromptSelectionShortcutMode: String, CaseIterable, Identifiable {
     }
 }
 
+enum PromptOrderingMode: String, CaseIterable, Identifiable {
+    case libraryOrder
+    case mostUsed
+    case recentlyUsed
+
+    var id: String {
+        rawValue
+    }
+
+    var displayName: String {
+        switch self {
+        case .libraryOrder:
+            "Library order"
+        case .mostUsed:
+            "Most used"
+        case .recentlyUsed:
+            "Recently used"
+        }
+    }
+}
+
+struct PromptUsageStats: Codable, Equatable {
+    let copyCount: Int
+    let lastCopiedAt: Date?
+
+    static let empty = PromptUsageStats(copyCount: 0, lastCopiedAt: nil)
+}
+
 protocol LoginItemManaging {
     var launchAtLoginStatus: LaunchAtLoginStatus { get }
 
@@ -90,6 +118,8 @@ final class SettingsStore: ObservableObject {
         static let overlayFixedHeightPixels = "settings.overlayFixedHeightPixels"
         static let promptPreviewCharacterLimit = "settings.promptPreviewCharacterLimit"
         static let promptSelectionShortcutMode = "settings.promptSelectionShortcutMode"
+        static let promptOrderingMode = "settings.promptOrderingMode"
+        static let promptUsageStats = "settings.promptUsageStats"
     }
 
     nonisolated static let defaultDoubleControlThresholdMilliseconds = 350
@@ -129,6 +159,12 @@ final class SettingsStore: ObservableObject {
             defaults.set(promptSelectionShortcutMode.rawValue, forKey: Keys.promptSelectionShortcutMode)
         }
     }
+    @Published var promptOrderingMode: PromptOrderingMode {
+        didSet {
+            defaults.set(promptOrderingMode.rawValue, forKey: Keys.promptOrderingMode)
+        }
+    }
+    @Published private(set) var promptUsageStats: [Prompt.ID: PromptUsageStats]
 
     @Published private(set) var launchAtLoginStatus: LaunchAtLoginStatus
     @Published private(set) var launchAtLoginErrorMessage: String?
@@ -197,6 +233,13 @@ final class SettingsStore: ObservableObject {
         } else {
             self.promptSelectionShortcutMode = .spatialLetters
         }
+        if let rawOrderingMode = defaults.string(forKey: Keys.promptOrderingMode),
+           let orderingMode = PromptOrderingMode(rawValue: rawOrderingMode) {
+            self.promptOrderingMode = orderingMode
+        } else {
+            self.promptOrderingMode = .libraryOrder
+        }
+        self.promptUsageStats = Self.loadPromptUsageStats(from: defaults, key: Keys.promptUsageStats)
 
         self.launchAtLoginStatus = loginItemManager.launchAtLoginStatus
         self.launchAtLoginErrorMessage = nil
@@ -263,6 +306,15 @@ final class SettingsStore: ObservableObject {
         defaults.set(promptPreviewCharacterLimit, forKey: Keys.promptPreviewCharacterLimit)
     }
 
+    func recordPromptCopy(promptID: Prompt.ID, copiedAt: Date = Date()) {
+        let currentStats = promptUsageStats[promptID] ?? .empty
+        promptUsageStats[promptID] = PromptUsageStats(
+            copyCount: currentStats.copyCount + 1,
+            lastCopiedAt: copiedAt
+        )
+        persistPromptUsageStats()
+    }
+
     func setLaunchAtLoginEnabled(_ isEnabled: Bool) {
         do {
             try loginItemManager.setLaunchAtLoginEnabled(isEnabled)
@@ -311,6 +363,25 @@ final class SettingsStore: ObservableObject {
     ) -> Int {
         let storedValue = defaults.integer(forKey: key)
         return storedValue == 0 ? defaultValue : storedValue
+    }
+
+    private static func loadPromptUsageStats(
+        from defaults: UserDefaults,
+        key: String
+    ) -> [Prompt.ID: PromptUsageStats] {
+        guard let data = defaults.data(forKey: key),
+              let stats = try? JSONDecoder().decode([Prompt.ID: PromptUsageStats].self, from: data)
+        else {
+            return [:]
+        }
+        return stats
+    }
+
+    private func persistPromptUsageStats() {
+        guard let data = try? JSONEncoder().encode(promptUsageStats) else {
+            return
+        }
+        defaults.set(data, forKey: Keys.promptUsageStats)
     }
 }
 
